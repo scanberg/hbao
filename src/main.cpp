@@ -9,10 +9,10 @@
 #define WIDTH 1024
 #define HEIGHT 768
 
-#define AO_WIDTH (1024/2)
-#define AO_HEIGHT (768/2)
+#define AO_WIDTH (WIDTH/2)
+#define AO_HEIGHT (HEIGHT/2)
 
-#define ROTATION_SPEED 0.1
+#define ROTATION_SPEED 0.0
 
 bool setupGL();
 void calcFPS();
@@ -23,6 +23,8 @@ void cleanUp();
 
 void modifyModel(mat4 &m);
 void modifyCamera(Camera *cam);
+
+void generateNoiseTexture(int width, int height);
 
 static bool running = true;
 static Geometry * mesh;
@@ -35,6 +37,8 @@ static Shader * hbaoShader;
 
 static Framebuffer2D * fboFullRes;
 static Framebuffer2D * fboHalfRes;
+
+static GLuint noiseTexture;
 
 int main()
 {
@@ -70,7 +74,7 @@ int main()
 
 		mesh->draw();
 
-    // SOBEL PASS
+    // AO pass
 
     glDisable(GL_DEPTH_TEST);
 
@@ -82,6 +86,9 @@ int main()
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
     fboHalfRes->bind();
 
@@ -101,9 +108,6 @@ int main()
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
-
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
     glClearColor(1.0, 1.0, 1.0, 0.0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -191,6 +195,11 @@ void init()
   glUniform2f(pos, AO_WIDTH, AO_HEIGHT);
   pos = hbaoShader->getUniformLocation("InvAORes");
   glUniform2f(pos, 1.0f/AO_WIDTH, 1.0f/AO_HEIGHT);
+
+  glGenTextures(1, &noiseTexture);
+  glBindTexture(GL_TEXTURE_2D, noiseTexture);
+  generateNoiseTexture(4, 4);
+
 }
 
 void cleanUp()
@@ -206,6 +215,8 @@ void cleanUp()
 
   delete fboFullRes;
   delete fboHalfRes;
+
+  glDeleteTextures(1, &noiseTexture);
 }
 
 bool setupGL()
@@ -260,12 +271,12 @@ bool setupGL()
 
 void GLFWCALL keyCallback(int key, int action)
 {
-	switch(key)
-	{
-		case GLFW_KEY_ESC:
-			running = false;
-			break;
-	}
+  switch(key)
+  {
+    case GLFW_KEY_ESC:
+    	running = false;
+    	break;
+  }
 }
 
 void calcFPS()
@@ -325,7 +336,31 @@ void modifyModel( mat4 &m )
     m = glm::rotate(mat4(), angle, vec3(0.0f,1.0f,0.0f));
 }
 
-void generateRandomTexture()
+void generateNoiseTexture(int width, int height)
 {
-  
+  float *noise = new float[width*height*3];
+  for(int y = 0; y < height; ++y)
+  {
+    for(int x = 0; x < width; ++x)
+    {
+      vec2 xy = glm::circularRand(1.0f);
+      float z = glm::linearRand(-1.0f, 1.0f);
+
+      int offset = 3*(y*width + x);
+      noise[offset + 0] = xy[0];
+      noise[offset + 1] = xy[1];
+      noise[offset + 2] = z;
+    }
+  }
+
+  GLint internalFormat = GL_RGB8;
+  GLint format = GL_RGB;
+  GLint type = GL_FLOAT;
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+  glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, type, noise);
 }

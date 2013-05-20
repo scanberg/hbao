@@ -28,8 +28,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
-//#include <glm/gtc/random.hpp>
-#include <glm/gtx/random.hpp>
+#include <glm/gtc/random.hpp>
+//#include <glm/gtx/random.hpp>
 
 #ifndef MAXFLOAT
 #define MAXFLOAT 1e+37f
