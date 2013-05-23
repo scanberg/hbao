@@ -186,6 +186,8 @@ void init()
 
   hbaoShader->bind();
   int pos;
+  pos = hbaoShader->getUniformLocation("FocalLen");
+  glUniform2f(pos, FocalLen[0], FocalLen[1]);
   pos = hbaoShader->getUniformLocation("UVToViewA");
   glUniform2f(pos, UVToViewA[0], UVToViewA[1]);
   pos = hbaoShader->getUniformLocation("UVToViewB");

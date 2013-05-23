@@ -5,14 +5,15 @@ uniform sampler2D texture1;
 uniform sampler2D texture2;
 uniform sampler2D texture3;
 
+uniform vec2 FocalLen;
 uniform vec2 UVToViewA;
 uniform vec2 UVToViewB;
 
 uniform vec2 AORes = vec2(1024.0, 768.0);
 uniform vec2 InvAORes = vec2(1.0/1024.0, 1.0/768.0);
 
-uniform float Radius = 4.0;
-uniform float NegInvR2 = - 1.0 / (4*4);
+uniform float Radius = 1.0;
+uniform float NegInvR2 = - 1.0 / (1*1);
 
 in vec2 TexCoord;
 
@@ -126,7 +127,7 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
 void main(void)
 {
 	const float PI = 3.14159265;
-	const float numDirections = 12;
+	const float numDirections = 6;
 	const float numSamples = 6;
 	const float strength = 1.0;
 
@@ -145,26 +146,38 @@ void main(void)
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
 
-	vec2 stepSize = Radius * InvAORes;
-	float alpha = 2.0 * PI / numDirections;
-	float ao = 0;
-	float d;
+    vec2 rayRadiusUV = 0.5 * Radius * FocalLen / -P.z;
+    float rayRadiusPix = rayRadiusUV.x * AORes.x;
 
-	for(d = 0; d < numDirections; ++d)
-	{
-		float theta = alpha * d;
-		vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random.xy);
-		vec2 deltaUV = dir * stepSize;
-		vec2 texelDeltaUV = dir * InvAORes;
-		ao += HorizonOcclusion(	deltaUV,
-								texelDeltaUV,
-								P,
-								dPdu,
-								dPdv,
-								numSamples);
+    float ao = 1.0;
+
+    if(rayRadiusPix > 1.0)
+    {
+    	ao = 0.0;
+    	float stepSizePix = rayRadiusPix / (numSamples + 1);
+		vec2 stepSizeUV = stepSizePix * InvAORes;
+
+		float alpha = 2.0 * PI / numDirections;
+		
+		float d;
+
+		for(d = 0; d < numDirections; ++d)
+		{
+			float theta = alpha * d;
+			vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random.xy);
+			vec2 deltaUV = dir * stepSizeUV;
+			vec2 texelDeltaUV = dir * InvAORes;
+			ao += HorizonOcclusion(	deltaUV,
+									texelDeltaUV,
+									P,
+									dPdu,
+									dPdv,
+									numSamples);
+		}
+
+		ao = 1.0 - ao / numDirections * strength;
 	}
 
-	ao = 1.0 - ao / numDirections * strength;
-	out_frag0 = 1.0 - ao;
-	//out_frag0 = vec3(-P.z);
+	out_frag0 = vec3(ao);
+	//out_frag0 = vec3(1);
 }
