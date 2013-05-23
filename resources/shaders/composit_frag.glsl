@@ -18,8 +18,7 @@ void main(void)
 	normal.z = 1.0 - sqrt(dot(normal.xy, normal.xy));
 
 	out_frag0 = vec4(color.rgb * ao, color.a);
-	//out_frag0 = vec4(abs(ao - viewSpacePos)*100, 1.0);
+	//out_frag0 = vec4(abs(ao - viewSpacePos)*10, 1.0);
 	//out_frag0 = vec4(ao, 1.0);
 	//out_frag0 = vec4(viewSpacePos, 1.0);
-	//out_frag0 = vec4(texture(texture3, TexCoord).rgb, 1.0);
 }

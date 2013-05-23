@@ -9,8 +9,8 @@
 #define WIDTH 1024
 #define HEIGHT 768
 
-#define AO_WIDTH (WIDTH/2)
-#define AO_HEIGHT (HEIGHT/2)
+#define AO_WIDTH (WIDTH/1)
+#define AO_HEIGHT (HEIGHT/1)
 
 #define ROTATION_SPEED 0.0
 
@@ -94,6 +94,9 @@ int main()
 
     hbaoShader->bind();
 
+    int uniformPos = hbaoShader->getUniformLocation("invViewMatrix");
+    glUniformMatrix4fv(uniformPos, 1, false, glm::value_ptr(cam->getInverseViewMatrix()));
+
     fsquad->draw();
 
     fboHalfRes->unbind();
@@ -108,6 +111,9 @@ int main()
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
     glClearColor(1.0, 1.0, 1.0, 0.0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -135,7 +141,7 @@ void init()
 	cam = new Camera();
 
 	mesh = new Geometry();
-	loadObj(*mesh, "resources/meshes/bunny.obj", 0.1f);
+	loadObj(*mesh, "resources/meshes/bunny.obj", 0.2f);
 	mesh->createStaticBuffers();
 
   fsquad = new Geometry();
@@ -164,7 +170,7 @@ void init()
   fboFullRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboFullRes->attachBuffer(FBO_AUX0, GL_RGBA8, GL_RGBA, GL_FLOAT);
   fboFullRes->attachBuffer(FBO_AUX1, GL_RG16F, GL_RG, GL_FLOAT);
-  fboFullRes->attachBuffer(FBO_AUX2, GL_RGB32F, GL_RGB, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  fboFullRes->attachBuffer(FBO_AUX2, GL_RGB16F, GL_RGB, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
   // Half res buffer for AO
   fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
@@ -172,7 +178,7 @@ void init()
 
   float fovRad = cam->getFov() * 3.14159265f / 180.0f;
 
-  vec2 FocalLen, InvFocalLen, UVToViewA, UVToViewB;
+  vec2 FocalLen, InvFocalLen, UVToViewA, UVToViewB, LinMAD;
 
   FocalLen[0]      = 1.0f / tanf(fovRad * 0.5f) * ((float)AO_HEIGHT / (float)AO_WIDTH);
   FocalLen[1]      = 1.0f / tanf(fovRad * 0.5f);
@@ -184,6 +190,10 @@ void init()
   UVToViewB[0] =  1.0f * InvFocalLen[0];
   UVToViewB[1] =  1.0f * InvFocalLen[1];
 
+  float near = cam->getNear(), far = cam->getFar();
+  LinMAD[0] = (near-far)/(2.0f*near*far);
+  LinMAD[1] = (near+far)/(2.0f*near*far);
+
   hbaoShader->bind();
   int pos;
   pos = hbaoShader->getUniformLocation("FocalLen");
@@ -192,6 +202,8 @@ void init()
   glUniform2f(pos, UVToViewA[0], UVToViewA[1]);
   pos = hbaoShader->getUniformLocation("UVToViewB");
   glUniform2f(pos, UVToViewB[0], UVToViewB[1]);
+  pos = hbaoShader->getUniformLocation("LinMAD");
+  glUniform2f(pos, LinMAD[0], LinMAD[1]);
 
   pos = hbaoShader->getUniformLocation("AORes");
   glUniform2f(pos, AO_WIDTH, AO_HEIGHT);

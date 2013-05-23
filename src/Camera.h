@@ -62,6 +62,8 @@ public:
     const vec3 &getOrientation() { return orientation; }
 
     float getFov() { return fov; }
+    float getNear() { return nearfar.x; }
+    float getFar() { return nearfar.y; }
 
     const mat4 &getProjMatrix() { return projMat; }
     const mat4 &getViewMatrix() { return viewMat; }
