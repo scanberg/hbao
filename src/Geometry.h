@@ -76,7 +76,9 @@ public:
     void draw();
 
 private:
-    friend bool loadObj( std::vector<Geometry> &geomList, const std::string &filename, float scale, int flags );
+    friend bool loadObj(std::vector<Geometry> &geomList,
+                        const std::string &filename,
+                        float scale, int flags );
 
     u32 vao;
     u32 vbo_vertex;

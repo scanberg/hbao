@@ -5,9 +5,6 @@ const float PI = 3.14159265;
 uniform sampler2D texture0;
 uniform sampler2D texture1;
 uniform sampler2D texture2;
-uniform sampler2D texture3;
-
-uniform mat4 invViewMatrix;
 
 uniform vec2 FocalLen;
 uniform vec2 UVToViewA;
@@ -21,14 +18,14 @@ uniform vec2 InvAORes = vec2(1.0/1024.0, 1.0/768.0);
 uniform float Radius = 0.1;
 uniform float Radius2 = 0.1*0.1;
 uniform float NegInvR2 = - 1.0 / (0.1*0.1);
-uniform float TanBias = tan(0.0 * PI / 180.0);
+uniform float TanBias = tan(10.0 * PI / 180.0);
 
 in vec2 TexCoord;
 in vec2 Position;
 
 out vec3 out_frag0;
 
-float LinearizeDepth(float d, vec2 nf)
+float LinearizeDepth(float d)
 {
   // Linearize the depth value
   return 1.0 / (LinMAD.x * d + LinMAD.y);
@@ -40,10 +37,15 @@ vec3 UVToViewSpace(vec2 uv, float z)
 	return vec3(uv * z, z);
 }
 
-vec3 GetViewPos(vec2 uv)
+vec3 GetViewPosFront(vec2 uv)
 {
-	//return texture(texture2, uv).rgb;
-	float z = LinearizeDepth(texture(texture0, uv).r, vec2(0.1, 10.0));
+	float z = LinearizeDepth(texture(texture0, uv).r);
+	return UVToViewSpace(uv, -z);
+}
+
+vec3 GetViewPosBack(vec2 uv)
+{
+	float z = LinearizeDepth(texture(texture1, uv).r);
 	return UVToViewSpace(uv, -z);
 }
 
@@ -111,12 +113,16 @@ float HorizonOcclusion(	vec2 deltaUV,
 	float tanH = BiasedTangent(T);
 	float sinH = TanToSin(tanH);
 
+	float tanS;
+	float d2;
+	vec3 FS, BS;
+
 	for(int s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
-		vec3 S = GetViewPos(uv);
-		float tanS = Tangent(P, S);
-		float d2 = Length2(S - P);
+		FS = GetViewPosFront(uv);
+		tanS = Tangent(P, FS);
+		d2 = Length2(FS - P);
 
 		if(d2 < Radius2 && tanS > tanH)
 		{
@@ -126,6 +132,19 @@ float HorizonOcclusion(	vec2 deltaUV,
 			tanH = tanS;
 			sinH = sinS;
 		}
+
+		// BS = GetViewPosBack(uv);
+		// tanS = Tangent(P, BS);
+		// d2 = Length2(BS - P);
+
+		// if(d2 < Radius2 && tanS > tanH)
+		// {
+		//	float sinS = TanToSin(tanS);
+		//	ao += Falloff(d2) * (sinS - sinH);
+
+		//	tanH = tanS;
+		//	sinH = sinS;
+		// }
 	}
 	
 	return ao;
@@ -143,17 +162,17 @@ void main(void)
 	const int numSamples = 6;
 	const float strength = 1.0;
 
-	vec3 P = GetViewPos(TexCoord);
+	vec3 P = GetViewPosFront(TexCoord);
 
 	vec2 noiseScale = AORes / 4.0;
-	vec3 random = texture(texture3, Position.xy * noiseScale).rgb;
-	random.xy = normalize(random.xy);
+	vec3 random = texture(texture2, Position.xy * noiseScale).rgb;
+	//random.xy = normalize(random.xy);
 
 	vec3 Pr, Pl, Pt, Pb;
-    Pr = GetViewPos(TexCoord + vec2(InvAORes.x, 0));
-    Pl = GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
-    Pt = GetViewPos(TexCoord + vec2(0, InvAORes.y));
-    Pb = GetViewPos(TexCoord + vec2(0, -InvAORes.y));
+    Pr = GetViewPosFront(TexCoord + vec2(InvAORes.x, 0));
+    Pl = GetViewPosFront(TexCoord + vec2(-InvAORes.x, 0));
+    Pt = GetViewPosFront(TexCoord + vec2(0, InvAORes.y));
+    Pb = GetViewPosFront(TexCoord + vec2(0, -InvAORes.y));
 
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
@@ -175,7 +194,7 @@ void main(void)
 		for(float d = 0; d < numDirections; ++d)
 		{
 			float theta = alpha * d;
-			vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random);
+			vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random.xy);
 			vec2 deltaUV = dir * stepSizeUV;
 			ao += HorizonOcclusion(	deltaUV,
 									P,

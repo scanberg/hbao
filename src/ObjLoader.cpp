@@ -1,394 +1,383 @@
 /**
 Copyright (C) 2012-2014 Robin Skånberg
 
-Permission is hereby granted, free of charge,
-to any person obtaining a copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
+
+#include "ObjLoader.h"
 
 #include <iostream>
 #include <string>
 #include <cstdio>
-#include <cassert>
+#include <ctime>
 #include <fstream>
+#include <vector>
 #include <list>
-
-#include "ObjLoader.h"
-
-#define toFloat(x) atof(x.c_str())
-#define toInt(x) atoi(x.c_str())
-
-#define hasVertex tempVertex.size() > 0
-#define hasTexCoord tempTexCoord.size() > 0
-#define hasNormal tempNormal.size() > 0
-
-//#define DEBUG
 
 typedef struct
 {
-    unsigned int vertexIndex, texCoordIndex, normalIndex;
-}sStoredVertex;
+	int position;
+	int normal;
+	int texcoord;
+	int sg;
+	unsigned int index;
+}sVertexIndex;
 
-// Helper function to retrive the indices in a face chunk
-void getIndices(const std::string &str, int &v, int &t, int &n, bool vertex, bool texCoord, bool normal)
+typedef struct
 {
-    v = t = n = -1;
+	float x,y,z;
+}sVec3;
 
-    int slash[2];
-    int counter=0;
+typedef struct
+{
+	float x,y;
+}sVec2;
 
-    slash[0] = (int)str.length();
+bool equal(const sVertexIndex &lhs, const sVertexIndex &rhs);
 
-    for(int i=0; i<(int)str.length(); ++i)
-    {
-        if(str[i]=='/')
-        {
-            slash[counter]=i;
-            ++counter;
-        }
-    }
+unsigned int insertVertexIndex(	sVertexIndex vertex,
+								std::vector<sVertexIndex> &table,
+								std::vector<std::list<sVertexIndex> > &existingTable);
 
-    if(vertex)
-        v = atoi(str.substr(0,slash[0]).c_str())-1;
+void readPosition(	const std::string &line,
+					std::vector<sVec3> &table,
+					float scale);
 
-    if(counter==0)
-        return;
+void readNormal(	const std::string &line,
+					std::vector<sVec3> &table );
 
-    if(slash[0]+1 != slash[1] && texCoord)
-        t = atoi(str.substr(slash[0]+1,slash[0]+1+slash[1]).c_str())-1;
+void readTexcoord(	const std::string &line,
+					std::vector<sVec2> &table );
 
-    if(normal)
-        n = atoi(str.substr(slash[1]+1,str.length()).c_str())-1;
+void readFace(		const std::string &line,
+					std::vector<sVertexIndex> &vertexTable,
+					std::vector<std::list<sVertexIndex> > &existingTable,
+					std::vector<Mesh::sFace> &faceTable,
+					int sg);
+
+void readSG(		const std::string &line,
+					int &sg);
+
+void fillmesh(		Mesh *mesh,
+					std::vector<sVertexIndex> &vertexTable,
+					std::vector<Mesh::sFace> &faceTable,
+					std::vector<sVec3> &positionTable,
+					std::vector<sVec3> &normalTable,
+					std::vector<sVec2> &texcoordTable);
+
+bool loadMeshFromObj(const char *filename, Mesh *mesh, float scale)
+{
+	printf("Attempting to load mesh->from %s\n", filename);
+
+	if(!mesh)
+	{
+		printf("mesh->handle was null.\n");
+		return false;
+	}
+
+	std::ifstream filehandle;
+	filehandle.open(filename, std::ios::in);
+
+	if(filehandle.fail())
+	{
+		printf("Could not open file.\n");
+		return false;
+	}
+
+	std::vector<std::list<sVertexIndex> > existingVertexTable;
+
+	std::vector<sVertexIndex>	vertexTable;
+	std::vector<Mesh::sFace>		faceTable;
+
+	std::vector<sVec3> positionTable;
+	std::vector<sVec3> normalTable;
+	std::vector<sVec2> texcoordTable;
+
+	std::string line;
+	int sg = 0;
+
+	clock_t start, end;
+	start = clock();
+
+	printf("Reading data... ");
+
+	while( filehandle.good() && !filehandle.eof() )
+	{
+		std::getline(filehandle, line);
+		if(line[0] == 'v')
+		{
+			if(line[1] == 't')
+				readTexcoord(line, texcoordTable);
+			else if(line[1] == 'n')
+				readNormal(line, normalTable);
+			else
+				readPosition(line, positionTable, scale);
+		}
+		else if(line[0] == 'f')
+			readFace(line, vertexTable, existingVertexTable, faceTable, sg);
+		else if(line[0] == 's')
+			readSG(line, sg);
+	}
+	printf("done!\n");
+
+	printf("Filling mesh->.. ");
+	fillmesh(	mesh, vertexTable, faceTable,
+				positionTable, normalTable, texcoordTable);
+	printf("done!\n");
+
+    end = clock();
+    double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("\nTime taken %3.3fs \n", cpu_time_used);
+
+	printf("mesh->consisting of\n");
+	printf("%i vertices\n", mesh->numVertices);
+	printf("%i triangles\n", mesh->numFaces);
+
+	return true;
 }
 
-bool loadObj(Geometry &geom, const std::string &filename, float scale, int flags)
+bool equal(const sVertexIndex &lhs, const sVertexIndex &rhs)
 {
-    std::vector<Geometry> geomList;
-    loadObj(geomList,filename,scale,flags);
-
-    geom.clear();
-
-    // Pack all Geometry into one.
-    for(unsigned int i=0; i<geomList.size(); ++i)
-    {
-        geom.addGeometry(geomList[i]);
-    }
-
-    return 0;
+	return 	lhs.position == rhs.position &&
+			lhs.normal == rhs.normal &&
+			lhs.texcoord == rhs.texcoord &&
+			lhs.sg == rhs.sg;
 }
 
-class VertexBank
+unsigned int insertVertexIndex(	sVertexIndex vertex,
+								std::vector<sVertexIndex> &table,
+								std::vector<std::list<sVertexIndex> > &existingTable)
 {
-public:
-    VertexBank()
-    {
-        indexCounter = 0;
-        uniqueVertex.reserve(10000);
-    };
+	if(	vertex.position == -1 )
+	{
+		printf("Bad vertex given: v %i %i %i \n",
+			vertex.position, vertex.normal, vertex.texcoord);
 
-    bool isUnique(int v, int n, int t, int &index)
-    {
-        if(v >= uniqueVertex.size())
-        {
-            //printf("v is more than size \n");
+		return 0;
+	}
 
-            uniqueVertex.resize(v+1, std::list<VertexItem>() );
-            index = insert(v,n,t);
-            return true;
-        }
-        else
-        {
-            
-            std::list<VertexItem>::const_iterator it = uniqueVertex[v].begin();
-            while(it != uniqueVertex[v].end())
-            {
-                //if(n != it->n && t != it-> t)
-                //{
-                    index = it->realIndex;
-                    return false;
-                //}
-                ++it;
-            }
-            index = insert(v,n,t);
-            return true;
-        }
-    }
+	vertex.index = table.size();
 
-private:
-    int insert(int v, int n, int t)
-    {
-        //printf("inserting new item \n");
-        VertexItem vert;
-        vert.v = v;
-        vert.n = n;
-        vert.t = t;
+	// Check against existing vertices,
+	// Uses a hashtable approach with vertexIndex as the
+	// hashfunction, and variations of this vertexIndex is
+	// stored as a linked list in this slot.
 
-        //printf("Inserting n: %i, t: %i \n", n, t);
-        vert.realIndex = indexCounter++;            
+	// Is the 'hashindex' greater than the size of the table,
+	// then expand the table.
+	if( vertex.position >= (int)existingTable.size() )
+	{
+		existingTable.resize(vertex.position+1, std::list<sVertexIndex>());
+		existingTable[vertex.position].push_back(vertex);
+	}
+	else
+	{
+		// Check if the vertex already exists in the list
+		std::list<sVertexIndex>::const_iterator it = existingTable[vertex.position].begin();
+		while(it != existingTable[vertex.position].end())
+		{
+			if(equal(vertex, *it))
+				return it->index;
+			++it;
+		}
+		existingTable[vertex.position].push_back(vertex);
+	}
 
-        uniqueVertex[v].push_back(vert);
+/*	
+	// Brute force solution to check for duplicates 
+	for(unsigned int i=0; i<table.size(); ++i)
+	{
+		if(equal(vertex, table[i]))
+			return i;
+	}
+*/
 
-        return vert.realIndex;
-    }
-
-    typedef struct
-    {
-        int v;
-        int n;
-        int t;
-        int realIndex;
-    }VertexItem;
-
-    int indexCounter;
-
-    std::vector< std::list<VertexItem> > uniqueVertex;
-};
-
-size_t insertUnique(std::vector<vec2> &vec, const vec2 &item)
-{
-    for(size_t i=0; i<vec.size(); ++i)
-    {
-        if(vec[i] == item)
-        {
-            printf("not unique! \n");
-            return i;
-        }
-    }
-
-    vec.push_back(item);
-    return vec.size()-1;
+	// No vertex was found, insert and return the index.
+	table.push_back(vertex);
+	return vertex.index;
 }
 
-size_t insertUnique(std::vector<vec3> &vec, const vec3 &item)
+void readPosition(	const std::string &line,
+					std::vector<sVec3> &table,
+					float scale )
 {
-    for(size_t i=0; i<vec.size(); ++i)
-    {
-        if(vec[i] == item)
-        {
-            printf("not unique! \n");
-            return i;
-        }
-    }
+	sVec3 pos;
 
-    vec.push_back(item);
-    return vec.size()-1;
+	// v 1.0 2.0 3.0
+	sscanf(line.c_str(), "%*s %f %f %f", &pos.x, &pos.y, &pos.z);
+	pos.x *= scale;
+	pos.y *= scale;
+	pos.z *= scale;
+	table.push_back(pos);
 }
 
-bool loadObj( std::vector<Geometry> &geomList, const std::string &filename, float scale, int flags)
+void readNormal(const std::string &line,
+				std::vector<sVec3> &table )
 {
-    std::ifstream file;
-    file.open(filename.c_str(), std::ios::in);
+	sVec3 norm;
 
-    std::cout<<"loading "<<filename<<std::endl;
+	// vn 1.0 2.0 3.0
+	sscanf(line.c_str(), "%*s %f %f %f", &norm.x, &norm.y, &norm.z);
+	table.push_back(norm);
+}
 
-    if(file.fail())
-    {
-        std::cout<<"loadObj failed, could not read "<<std::endl;
-        return 1;
-    }
+void readTexcoord(	const std::string &line,
+					std::vector<sVec2> &table )
+{
+	sVec2 texcoord;
 
-    VertexBank vb;
+	// vt 1.0 2.0
+	sscanf(line.c_str(), "%*s %f %f", &texcoord.x, &texcoord.y);
+	table.push_back(texcoord);
+}
 
-    Geometry g;
-    std::string line,param;
+void readFace(	const std::string &line,
+				std::vector<sVertexIndex> &vertexTable,
+				std::vector<std::list<sVertexIndex> > &existingTable,
+				std::vector<Mesh::sFace> &faceTable,
+				int sg )
+{
+	int position[4] = 	{-1,-1,-1,-1};
+	int normal[4] 	= 	{-1,-1,-1,-1};
+	int texcoord[4] = 	{-1,-1,-1,-1};
+	int params[3] 	= 	{-1,-1,-1};
+	int count = 0;
 
-    std::vector<vec3> tempVertex;
-    std::vector<vec3> tempNormal;
-    std::vector<vec2> tempTexCoord;
+	// f 1 2 3 (4)
+	// f 1/2 1/2 1/2 (1/2)
+	// f 1/2/3 1/2/3 1/2/3 (1/2/3)
 
-    tempVertex.reserve(10000);
-    tempNormal.reserve(10000);
-    tempTexCoord.reserve(10000);
-    
-    std::vector<std::vector<int> > vertexUsed;
-    std::vector<int> texCoordUsed;
-    int tempSG = 0;
+	// shared buffer for chunks, wierd bug if memory was not allocated from heap
+	// but as char c[4][100]
+	char *buffer = new char[400];
+	char *c[4] = {&buffer[0], &buffer[100], &buffer[200], &buffer[300]};
 
-    std::vector<size_t> vertexRemap;
-    std::vector<size_t> normalRemap;
-    std::vector<size_t> texCoordRemap;
+	count = sscanf(line.c_str(), "%*s %s %s %s %s", c[0], c[1], c[2], c[3]);
 
-    std::vector<int> resetVector;
-    resetVector.resize(1,-1);
+	for(int i=0; i<count; ++i)
+	{
+		int p = sscanf(c[i], "%i/%i/%i", &params[0], &params[1], &params[2]);
+		position[i] = (p > 0 && params[0] > 0) ? params[0]-1 : -1;
+		normal[i] 	= (p > 1 && params[1] > 0) ? params[1]-1 : -1;
+		texcoord[i] = (p > 2 && params[2] > 0) ? params[2]-1 : -1;
+	}
 
-    std::string tempName;
+	delete[] buffer;
 
-    while( !file.eof() && file.good() )
-    {
-        std::getline(file,line);
+	// Triangle or Quad
+	if(count == 3 || count == 4)
+	{
+		sVertexIndex vertex;
+		Mesh::sFace face;
+		unsigned int indices[4] = {0,0,0,0};
 
-        #ifdef DEBUG
-        std::cout<<line<<"\n";
-        #endif
-        Tokenizer token(line);
+		for(int i=0; i<count; ++i)
+		{
+			vertex.position = position[i];
+			vertex.normal 	= normal[i];
+			vertex.texcoord = texcoord[i];
+			indices[i] = insertVertexIndex(vertex, vertexTable, existingTable);
+		}
 
-        param = token.getToken();
-        if(param == "v")
-        {
-            vec3 vertex;
+		face.v[0] = indices[0];
+		face.v[1] = indices[1];
+		face.v[2] = indices[2];
 
-            vertex.x = scale*toFloat(token.getToken());
-            vertex.y = scale*toFloat(token.getToken());
-            vertex.z = scale*toFloat(token.getToken());
+		faceTable.push_back(face);
 
-            //tempVertex.push_back(vertex);
-            //vertexUsed.push_back(resetVector);
-            vertexRemap.push_back( insertUnique(tempVertex, vertex) );
-        }
-        else if(param == "f")
-        {
-            ivec4 vdata(-1), tdata(-1), ndata(-1), fdata(-1);
+		if(count == 4)
+		{
+			face.v[0] = indices[3];
+			face.v[1] = indices[0];
+			face.v[2] = indices[2];
+			faceTable.push_back(face);
+		}
+	}
+}
 
-            for(int i=0; i<token.size()-1; ++i)
-            {
-                param = token.getToken();
-                getIndices(param, vdata[i], tdata[i], ndata[i],
-                    hasVertex,
-                    hasTexCoord,
-                    hasNormal);
+void readSG(const std::string &line,
+			int &sg )
+{
+	// s 1
+	sscanf(line.c_str(), "%*s %i", &sg);
+}
 
-                int remappedV = (vdata[i] > -1) ? vdata[i] : -1;
-                int remappedN = (ndata[i] > -1) ? ndata[i] : -1;
-                int remappedT = (tdata[i] > -1) ? tdata[i] : -1;
+void fillmesh(	Mesh *mesh,
+				std::vector<sVertexIndex> &vertexTable,
+				std::vector<Mesh::sFace> &faceTable,
+				std::vector<sVec3> &positionTable,
+				std::vector<sVec3> &normalTable,
+				std::vector<sVec2> &texcoordTable )
+{
+	mesh->numVertices = vertexTable.size();
+	mesh->vertices = new Mesh::sVertex[mesh->numVertices];
 
-                int index;
-                //printf("Checking vertex uniqueness \n");
-                if(vb.isUnique(remappedV, remappedN, remappedT, index))
-                {
-                    index = g.getVertexSize();
+	mesh->numFaces = faceTable.size();
+	mesh->faces = new Mesh::sFace[mesh->numFaces];
 
-                    Geometry::sVertex tv;
+	for(unsigned int i=0; i<mesh->numVertices; ++i)
+	{
+		int pos, norm, tc;
+		pos = vertexTable[i].position;
+		norm = vertexTable[i].normal;
+		tc = vertexTable[i].texcoord;
 
-                    assert( remappedV < tempVertex.size() );
-                    tv.position = tempVertex[ remappedV ];
+		if(pos > -1 && pos < (int)positionTable.size())
+		{
+			mesh->vertices[i].x = positionTable[pos].x;
+			mesh->vertices[i].y = positionTable[pos].y;
+			mesh->vertices[i].z = positionTable[pos].z;
+		}
+		else
+		{
+			mesh->vertices[i].x = 0.0f;
+			mesh->vertices[i].y = 0.0f;
+			mesh->vertices[i].z = 0.0f;
+		}
 
-                    if(remappedT > -1)
-                    {
-                        assert( remappedT < tempTexCoord.size() );
-                        tv.texCoord = tempTexCoord[ remappedT ];
-                    }
-                    if(remappedN > -1)
-                    {
-                        assert( remappedN < tempNormal.size() );
-                        tv.normal = tempNormal[ remappedN ];
-                    }
+		if(norm > -1 && norm < (int)normalTable.size())
+		{
+			mesh->vertices[i].nx = normalTable[norm].x;
+			mesh->vertices[i].ny = normalTable[norm].y;
+			mesh->vertices[i].nz = normalTable[norm].z;
+		}
+		else
+		{
+			mesh->vertices[i].nx = 0.0f;
+			mesh->vertices[i].ny = 0.0f;
+			mesh->vertices[i].nz = 0.0f;
+		}
 
-                    g.addVertex(tv);
-                }
+		if(tc > -1 && tc < (int)texcoordTable.size())
+		{
+			mesh->vertices[i].u = texcoordTable[norm].x;
+			mesh->vertices[i].v = texcoordTable[norm].y;
+		}
+		else
+		{
+			mesh->vertices[i].u = 0.0f;
+			mesh->vertices[i].v = 0.0f;
+		}
+	}
 
-                assert(index < g.getVertexSize());
-                fdata[i] = index;
-
-                // if(tempSG > (int)vertexUsed[vdata[i]].size()-1)
-                //     vertexUsed[vdata[i]].resize(tempSG+1,-1);
-
-                // if(vertexUsed[vdata[i]][tempSG] > -1)
-                //     fdata[i] = vertexUsed[vdata[i]][tempSG];
-                // else
-                // {
-                //     vertexUsed[vdata[i]][tempSG] = (int)g.vertices.size();
-
-                //     fdata[i] = g.getVertexSize();
-
-                //     Geometry::sVertex tv;
-                //     tv.position = tempVertex[vdata[i]];
-                //     //tv.nx = tv.ny = tv.nz = tv.s = tv.t = 0.0f;
-
-                //     if(vtdata[i]>-1 && !(flags & LOADOBJ_IGNORE_TEXCOORDS))
-                //     {
-                //         assert( vtdata[i] < tempTexCoord.size() );
-                //         tv.texCoord = tempTexCoord[vtdata[i]];
-                //     }
-                //     if(ndata[i]>-1 && !(flags & LOADOBJ_IGNORE_NORMALS))
-                //     {
-                //         assert( ndata[i] < tempNormal.size() );
-                //         tv.normal = tempNormal[ndata[i]];
-                //     }
-
-                //     g.addVertex(tv);
-                // }
-            }
-            // if its a triangle, just insert.
-            // However if its a quad, then insert the two triangles forming the quad.
-            uvec3 t;
-            t[0] = fdata[0];
-            t[1] = fdata[1];
-            t[2] = fdata[2];
-
-            g.addTriangle(t);
-
-            if(fdata[3] != -1)
-            {
-                t[0] = fdata[3];
-                t[1] = fdata[0];
-                t[2] = fdata[2];
-
-                g.addTriangle(t);
-            }
-        }
-        else if(param == "vt")
-        {
-            vec2 tc;
-
-            tc.x = toFloat(token.getToken());
-            tc.y = toFloat(token.getToken());
-
-            //tempTexCoord.push_back(tc);
-            texCoordRemap.push_back( insertUnique(tempTexCoord, tc) );
-        }
-        else if(param == "vn")
-        {
-            vec3 normal;
-
-            normal.x = toFloat(token.getToken());
-            normal.y = toFloat(token.getToken());
-            normal.z = toFloat(token.getToken());
-
-            //tempNormal.push_back(normal);
-            normalRemap.push_back( insertUnique(tempNormal, normal) );
-        }
-        else if(param == "s")
-            tempSG = toInt(token.getToken());
-        else if(param == "g")
-        {
-            /*if(first)
-                first=false;
-            else
-            {
-                g.process();
-                geomList.push_back(g);
-            }
-
-            for(unsigned int i=0; i<vertexUsed.size(); ++i)
-                vertexUsed[i].clear();
-            
-            g.clear();
-            */
-        }
-
-        if(file.eof())
-            break;
-    }
-    file.close();
-    printf("tempVertex.size() = %i \n", (int)tempVertex.size());
-    printf("tempNormal.size() = %i \n", (int)tempNormal.size());
-    printf("tempTexCoord.size() = %i \n", (int)tempTexCoord.size());
-    printf("Reading is done, gonna process \n");
-    g.process();
-    geomList.push_back(g);
-
-    std::cout<<"done reading "<<filename<<std::endl;
-
-    return 0;
+	for(unsigned int i=0; i<mesh->numFaces; ++i)
+	{
+		mesh->faces[i] = faceTable[i];
+	}
 }

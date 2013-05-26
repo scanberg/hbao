@@ -5,14 +5,17 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "Framebuffer2D.h"
+#include "MeshToGeometryAdapter.h"
 
 #define WIDTH 1024
 #define HEIGHT 768
 
-#define AO_WIDTH (WIDTH/1)
-#define AO_HEIGHT (HEIGHT/1)
+#define AO_WIDTH (WIDTH/2)
+#define AO_HEIGHT (HEIGHT/2)
 
 #define ROTATION_SPEED 0.0
+#define MOVE_SPEED 0.01
+#define MOUSE_SPEED 0.1
 
 bool setupGL();
 void calcFPS();
@@ -21,17 +24,17 @@ void GLFWCALL keyCallback(int key, int action);
 void init();
 void cleanUp();
 
-void modifyModel(mat4 &m);
 void modifyCamera(Camera *cam);
 
 void generateNoiseTexture(int width, int height);
 
 static bool running = true;
-static Geometry * mesh;
+static Geometry * model;
 static Geometry * fsquad;
 static Camera * cam;
 
 static Shader * geometryShader;
+static Shader * geometryBackShader;
 static Shader * compositShader;
 static Shader * hbaoShader;
 
@@ -44,18 +47,15 @@ int main()
 {
 	init();
 
-	mat4 modelMatrix;
-  vec3 lookAt = vec3(0.0,0.0,0.0);
+  GLenum buffer[1];
 
-  cam->translate(vec3(0.0,0.0,2.0));
-  cam->lookAt(&lookAt);
+  cam->translate(vec3(0,0,2));
 
 	while(running)
 	{
     calcFPS();
 
 		modifyCamera(cam);
-		modifyModel(modelMatrix);
 
     cam->setup();
 
@@ -66,13 +66,28 @@ int main()
     glClearColor(0.0, 0.0, 0.0, 0.0);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-		geometryShader->bind();
+    geometryShader->bind();
 
-    glUniformMatrix4fv(geometryShader->getModelMatrixLocation(), 1, false, glm::value_ptr(modelMatrix));
-    glUniformMatrix4fv(geometryShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
-    glUniformMatrix4fv(geometryShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
+    //buffer[0] = GL_COLOR_ATTACHMENT1;
+    //glDrawBuffers(1, buffer);
+    glCullFace(GL_BACK);
 
-		mesh->draw();
+    glUniformMatrix4fv(geometryBackShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
+    glUniformMatrix4fv(geometryBackShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
+
+    model->draw();
+
+		//geometryShader->bind();
+
+    //buffer[0] = GL_COLOR_ATTACHMENT0;
+    //glDrawBuffers(1, buffer);
+
+    //glCullFace(GL_BACK);
+
+    //glUniformMatrix4fv(geometryShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
+    //glUniformMatrix4fv(geometryShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
+
+		//model->draw();
 
     // AO pass
 
@@ -85,17 +100,11 @@ int main()
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
 
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
-
-    glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
     fboHalfRes->bind();
 
     hbaoShader->bind();
-
-    int uniformPos = hbaoShader->getUniformLocation("invViewMatrix");
-    glUniformMatrix4fv(uniformPos, 1, false, glm::value_ptr(cam->getInverseViewMatrix()));
 
     fsquad->draw();
 
@@ -111,9 +120,6 @@ int main()
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
-
-    glActiveTexture(GL_TEXTURE3);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
     glClearColor(1.0, 1.0, 1.0, 0.0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -140,9 +146,14 @@ void init()
 
 	cam = new Camera();
 
-	mesh = new Geometry();
-	loadObj(*mesh, "resources/meshes/bunny.obj", 0.2f);
-	mesh->createStaticBuffers();
+	model = new Geometry();
+  Mesh *mesh = new Mesh();
+  loadMeshFromObj("resources/meshes/sponza.obj", mesh, 0.01f);
+  fillGeometryFromMesh(model, mesh);
+	//loadObj(*model, "resources/meshes/sponza.obj", 0.2f);
+	model->createStaticBuffers();
+
+  delete mesh;
 
   fsquad = new Geometry();
 
@@ -159,6 +170,9 @@ void init()
 	geometryShader = new Shader("resources/shaders/geometry_vert.glsl",
 							"resources/shaders/geometry_frag.glsl");
 
+  geometryBackShader = new Shader("resources/shaders/geometry_vert.glsl",
+              "resources/shaders/geometry_back_frag.glsl");
+
   hbaoShader = new Shader("resources/shaders/fullscreen_vert.glsl",
               "resources/shaders/hbao_frag.glsl");
 
@@ -169,8 +183,8 @@ void init()
   fboFullRes = new Framebuffer2D(WIDTH, HEIGHT);
   fboFullRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboFullRes->attachBuffer(FBO_AUX0, GL_RGBA8, GL_RGBA, GL_FLOAT);
-  fboFullRes->attachBuffer(FBO_AUX1, GL_RG16F, GL_RG, GL_FLOAT);
-  fboFullRes->attachBuffer(FBO_AUX2, GL_RGB16F, GL_RGB, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  fboFullRes->attachBuffer(FBO_AUX1, GL_R32F, GL_RED, GL_FLOAT);
+  //fboFullRes->attachBuffer(FBO_AUX2, GL_RGB16F, GL_RGB, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
   // Half res buffer for AO
   fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
@@ -218,7 +232,7 @@ void init()
 
 void cleanUp()
 {
-	delete mesh;
+	delete model;
   delete fsquad;
 
 	delete cam;
@@ -315,29 +329,35 @@ void calcFPS()
 
 void modifyCamera(Camera *cam)
 {
-    static int oldMouseX=320, oldMouseY=240, oldMouseZ=1;
-    static vec2 rotAngle = vec2(PI,0.5*PI);
-    static float dist = 2.0;
-    int mouseX, mouseY, mouseZ;
+    int x,y;
 
-    glfwGetMousePos(&mouseX, &mouseY);
-    mouseZ = glfwGetMouseWheel();
+    glfwGetMousePos(&x, &y);
 
-    vec2 mouseMove((float)(mouseX-oldMouseX), (float)(mouseY-oldMouseY));
-    dist += (float)(mouseZ-oldMouseZ) * 0.1f;
+    vec3 camrot = cam->getOrientation();
 
-    oldMouseX = mouseX; oldMouseY = mouseY; oldMouseZ = mouseZ;
+    camrot.x -= (float)(y-HEIGHT/2) * MOUSE_SPEED;
+    camrot.y -= (float)(x-WIDTH/2)  * MOUSE_SPEED;
+    
+    if(camrot.x > 90.0f) camrot.x = 90.0f;
+    if(camrot.x < -90.0f) camrot.x = -90.0f;
+    if(camrot.y > 360.0f) camrot.y -= 360.0f;
+    if(camrot.y < -360.0f) camrot.y += 360.0f;
+    
+    cam->setOrientation(camrot);
+    glfwSetMousePos(WIDTH/2, HEIGHT/2);
 
-    if(glfwGetMouseButton(GLFW_MOUSE_BUTTON_LEFT))
-        rotAngle += mouseMove * 0.02f;
+    vec3 movevec;
 
-    rotAngle.y = glm::clamp(rotAngle.y, 0.02f, PI * 0.98f);
-    dist = glm::clamp(dist, 0.6f, 10.0f);
+    if(glfwGetKey('W'))
+        movevec.z -= MOVE_SPEED;
+    if(glfwGetKey('A'))
+        movevec.x -= MOVE_SPEED;
+    if(glfwGetKey('S'))
+        movevec.z += MOVE_SPEED;
+    if(glfwGetKey('D'))
+        movevec.x += MOVE_SPEED;
 
-    float theta = -rotAngle.y;
-    float phi = -rotAngle.x;
-
-    cam->setPosition(dist*glm::sin(theta)*glm::sin(phi), dist*glm::cos(theta), dist*glm::sin(theta)*glm::cos(phi));
+    cam->move(movevec);
 }
 
 void modifyModel( mat4 &m )
@@ -358,7 +378,7 @@ void generateNoiseTexture(int width, int height)
     for(int x = 0; x < width; ++x)
     {
       vec2 xy = glm::circularRand(1.0f);
-      float z = glm::linearRand(-1.0f, 1.0f);
+      float z = glm::linearRand(0.0f, 1.0f);
 
       int offset = 3*(y*width + x);
       noise[offset + 0] = xy[0];
@@ -367,7 +387,7 @@ void generateNoiseTexture(int width, int height)
     }
   }
 
-  GLint internalFormat = GL_RGB8;
+  GLint internalFormat = GL_RGB16F;
   GLint format = GL_RGB;
   GLint type = GL_FLOAT;
 
