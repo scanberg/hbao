@@ -14,7 +14,7 @@
 #define AO_HEIGHT (HEIGHT)
 #define AO_RADIUS 0.2
 
-#define NOISE_RES 256
+#define NOISE_RES 64
 
 #define ROTATION_SPEED 0.0
 #define MOVE_SPEED 3.5
@@ -325,18 +325,29 @@ void GLFWCALL keyCallback(int key, int action)
 
 void calcFPS(float &dt)
 {
-    static double t0=0.0;
+    static float t0=0.0;
+    static float t1=0.0;
     static char title[256];
+    static int frames=0;
 
-    double t = glfwGetTime();
+    float t = (float)glfwGetTime();
 
-    dt = (float)(t - t0);
+    dt = t - t0;
     t0 = t;
 
-    float fps = 1.0f / dt;
+    t1 += dt;
 
-    sprintf(title, "FPS: %3.1f", fps);
-    glfwSetWindowTitle(title);
+    if(t1 > 0.25)
+    {
+      float fps = (float)frames / t1;
+
+      sprintf(title, "FPS: %3.1f", fps);
+      glfwSetWindowTitle(title);
+      t1 = 0.0;
+      frames = 0;
+    }
+
+    ++frames;
 }
 
 void modifyCamera(float dt)

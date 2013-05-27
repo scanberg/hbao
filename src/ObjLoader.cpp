@@ -212,9 +212,12 @@ std::vector<Mesh> loadMeshesFromObj(const char *filename, float scale)
 		}
 	}
 
-	Mesh m = createMesh(name, vertexTable, faceTable,
-						positionTable, normalTable, texcoordTable);
-	meshes.push_back(m);
+	if(count > 0)
+	{
+		Mesh m = createMesh(name, vertexTable, faceTable,
+							positionTable, normalTable, texcoordTable);
+		meshes.push_back(m);
+	}
 
 	printf("done!\n");
 
@@ -341,8 +344,8 @@ void readFace(	const std::string &line,
 	// f 1/2 1/2 1/2 (1/2)
 	// f 1/2/3 1/2/3 1/2/3 (1/2/3)
 
-	// shared buffer for chunks, wierd bug if memory was not allocated from heap
-	// but as char c[4][100]
+	// shared buffer for chunks, wierd bug if memory was allocated
+	// as char c[4][100]
 	char *buffer = new char[400];
 	char *c[4] = {&buffer[0], &buffer[100], &buffer[200], &buffer[300]};
 

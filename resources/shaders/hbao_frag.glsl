@@ -21,6 +21,9 @@ uniform float R2 = 0.3*0.3;
 uniform float NegInvR2 = - 1.0 / (0.3*0.3);
 uniform float TanBias = tan(30.0 * PI / 180.0);
 
+uniform int NumDirections = 4;
+uniform int NumSamples = 4;
+
 in vec2 TexCoord;
 in vec2 Position;
 
@@ -161,8 +164,8 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
 
 void main(void)
 {
-	const float numDirections = 6.0;
-	const int numSamples = 6;
+	float numDirections = NumDirections;
+	int numSamples = NumSamples;
 	const float strength = 1.0;
 
 	vec3 P = GetViewPosFront(TexCoord);
