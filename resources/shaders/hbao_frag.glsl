@@ -15,10 +15,10 @@ uniform vec2 LinMAD;// = vec2(0.1-10.0, 0.1+10.0) / (2.0*0.1*10.0);
 uniform vec2 AORes = vec2(1024.0, 768.0);
 uniform vec2 InvAORes = vec2(1.0/1024.0, 1.0/768.0);
 
-uniform float Radius = 0.1;
-uniform float Radius2 = 0.1*0.1;
-uniform float NegInvR2 = - 1.0 / (0.1*0.1);
-uniform float TanBias = tan(10.0 * PI / 180.0);
+uniform float Radius = 0.2;
+uniform float Radius2 = 0.2*0.2;
+uniform float NegInvR2 = - 1.0 / (0.2*0.2);
+uniform float TanBias = tan(30.0 * PI / 180.0);
 
 in vec2 TexCoord;
 in vec2 Position;
@@ -27,8 +27,9 @@ out vec3 out_frag0;
 
 float LinearizeDepth(float d)
 {
-  // Linearize the depth value
-  return 1.0 / (LinMAD.x * d + LinMAD.y);
+	d = d * 2.0 - 1.0;
+	// Linearize the depth value
+	return 1.0 / (LinMAD.x * d + LinMAD.y);
 }
 
 vec3 UVToViewSpace(vec2 uv, float z)
@@ -158,7 +159,7 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
 
 void main(void)
 {
-	const float numDirections = 6.0;
+	const float numDirections = 16.0;
 	const int numSamples = 6;
 	const float strength = 1.0;
 
@@ -206,6 +207,9 @@ void main(void)
 
 		ao = 1.0 - ao / numDirections * strength;
 	}
+
+	//float frontZ = P.z;
+	//float backZ = texture(texture1, TexCoord).r;
 
 	out_frag0 = vec3(ao);
 }

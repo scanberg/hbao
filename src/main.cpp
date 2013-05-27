@@ -10,21 +10,21 @@
 #define WIDTH 1024
 #define HEIGHT 768
 
-#define AO_WIDTH (WIDTH/2)
-#define AO_HEIGHT (HEIGHT/2)
+#define AO_WIDTH (WIDTH)
+#define AO_HEIGHT (HEIGHT)
 
 #define ROTATION_SPEED 0.0
-#define MOVE_SPEED 0.01
-#define MOUSE_SPEED 0.1
+#define MOVE_SPEED 3.5
+#define MOUSE_SPEED 9.5
 
 bool setupGL();
-void calcFPS();
+void calcFPS(float &dt);
 void GLFWCALL keyCallback(int key, int action);
 
 void init();
 void cleanUp();
 
-void modifyCamera(Camera *cam);
+void modifyCamera(float dt);
 
 void generateNoiseTexture(int width, int height);
 
@@ -37,6 +37,8 @@ static Shader * geometryShader;
 static Shader * geometryBackShader;
 static Shader * compositShader;
 static Shader * hbaoShader;
+static Shader * blurXShader;
+static Shader * blurYShader;
 
 static Framebuffer2D * fboFullRes;
 static Framebuffer2D * fboHalfRes;
@@ -48,14 +50,15 @@ int main()
 	init();
 
   GLenum buffer[1];
+  float dt;
 
   cam->translate(vec3(0,0,2));
 
 	while(running)
 	{
-    calcFPS();
+    calcFPS(dt);
 
-		modifyCamera(cam);
+		modifyCamera(dt);
 
     cam->setup();
 
@@ -307,27 +310,23 @@ void GLFWCALL keyCallback(int key, int action)
   }
 }
 
-void calcFPS()
+void calcFPS(float &dt)
 {
     static double t0=0.0;
-    static int frameCount=0;
     static char title[256];
 
     double t = glfwGetTime();
 
-    if( (t - t0) > 0.25 )
-    {
-        double fps = (double)frameCount / (t - t0);
-        frameCount = 0;
-        t0 = t;
+    dt = (float)(t - t0);
+    t0 = t;
 
-        sprintf(title, "FPS: %3.1f", fps);
-        glfwSetWindowTitle(title);
-    }
-    frameCount++;
+    float fps = 1.0f / dt;
+
+    sprintf(title, "FPS: %3.1f", fps);
+    glfwSetWindowTitle(title);
 }
 
-void modifyCamera(Camera *cam)
+void modifyCamera(float dt)
 {
     int x,y;
 
@@ -335,8 +334,8 @@ void modifyCamera(Camera *cam)
 
     vec3 camrot = cam->getOrientation();
 
-    camrot.x -= (float)(y-HEIGHT/2) * MOUSE_SPEED;
-    camrot.y -= (float)(x-WIDTH/2)  * MOUSE_SPEED;
+    camrot.x -= (float)(y-HEIGHT/2) * MOUSE_SPEED * dt;
+    camrot.y -= (float)(x-WIDTH/2)  * MOUSE_SPEED * dt;
     
     if(camrot.x > 90.0f) camrot.x = 90.0f;
     if(camrot.x < -90.0f) camrot.x = -90.0f;
@@ -357,7 +356,7 @@ void modifyCamera(Camera *cam)
     if(glfwGetKey('D'))
         movevec.x += MOVE_SPEED;
 
-    cam->move(movevec);
+    cam->move(movevec * dt);
 }
 
 void modifyModel( mat4 &m )
