@@ -12,6 +12,9 @@
 
 #define AO_WIDTH (WIDTH)
 #define AO_HEIGHT (HEIGHT)
+#define AO_RADIUS 0.2
+
+#define NOISE_RES 256
 
 #define ROTATION_SPEED 0.0
 #define MOVE_SPEED 3.5
@@ -150,13 +153,10 @@ void init()
 	cam = new Camera();
 
 	model = new Geometry();
-  Mesh *mesh = new Mesh();
-  loadMeshFromObj("resources/meshes/sponza.obj", mesh, 0.01f);
-  fillGeometryFromMesh(model, mesh);
+  Mesh mesh = loadMeshFromObj("resources/meshes/sponza.obj", 0.01f);
+  fillGeometryFromMesh(model, &mesh);
 	//loadObj(*model, "resources/meshes/sponza.obj", 0.2f);
 	model->createStaticBuffers();
-
-  delete mesh;
 
   fsquad = new Geometry();
 
@@ -227,9 +227,21 @@ void init()
   pos = hbaoShader->getUniformLocation("InvAORes");
   glUniform2f(pos, 1.0f/AO_WIDTH, 1.0f/AO_HEIGHT);
 
+  pos = hbaoShader->getUniformLocation("R");
+  glUniform1f(pos, AO_RADIUS);
+  pos = hbaoShader->getUniformLocation("R2");
+  glUniform1f(pos, AO_RADIUS*AO_RADIUS);
+  pos = hbaoShader->getUniformLocation("NegInvR2");
+  glUniform1f(pos, -1.0f / (AO_RADIUS*AO_RADIUS));
+
+  pos = hbaoShader->getUniformLocation("NoiseScale");
+  glUniform2f(pos,
+              AO_WIDTH/(float)NOISE_RES,
+              AO_HEIGHT/(float)NOISE_RES);
+
   glGenTextures(1, &noiseTexture);
   glBindTexture(GL_TEXTURE_2D, noiseTexture);
-  generateNoiseTexture(4, 4);
+  generateNoiseTexture(NOISE_RES, NOISE_RES);
 
 }
 
@@ -291,9 +303,10 @@ bool setupGL()
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
   glCullFace(GL_BACK);
-	glfwSwapInterval(0);
+	glfwSwapInterval(1);
   glActiveTexture(GL_TEXTURE0);
   glClearColor(1.0, 1.0, 1.0, 0.0);
+  glfwDisable(GLFW_MOUSE_CURSOR);
 
 	glfwSetKeyCallback(keyCallback);
 

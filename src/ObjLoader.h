@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdio>
+#include <vector>
+#include <string>
 
 class Mesh
 {
@@ -17,26 +19,12 @@ class Mesh
 		unsigned int v[3];
 	}sFace;
 
-	unsigned int numVertices;
-	unsigned int numFaces;
-	sVertex * vertices;
-	sFace * faces;
+	std::vector<sVertex> vertices;
+	std::vector<sFace> faces;
 
-	Mesh() :
-		numVertices(0),
-		numFaces(0),
-		vertices(NULL),
-		faces(NULL)
-	{}
+	std::string name;
 
-	~Mesh()
-	{
-		if(vertices)
-			delete[] vertices;
-
-		if(faces)
-			delete[] faces;
-	}
 };
 
-bool loadMeshFromObj(const char* filename, Mesh *mesh, float scale = 1.0f);
+Mesh loadMeshFromObj(const char* filename, float scale = 1.0f);
+std::vector<Mesh> loadMeshesFromObj(const char* filename, float scale = 1.0f);

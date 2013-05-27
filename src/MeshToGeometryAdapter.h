@@ -6,7 +6,7 @@ void fillGeometryFromMesh(Geometry *g, Mesh *m)
 {
 	if(g && m)
 	{
-		for(unsigned int i=0; i<m->numVertices; ++i)
+		for(unsigned int i=0; i<m->vertices.size(); ++i)
 		{
 			Geometry::sVertex v;
 			v.position 	= vec3(m->vertices[i].x, m->vertices[i].y, m->vertices[i].z);
@@ -15,13 +15,15 @@ void fillGeometryFromMesh(Geometry *g, Mesh *m)
 			g->addVertex(v);
 		}
 
-		for(unsigned int i=0; i<m->numFaces; ++i)
+		for(unsigned int i=0; i<m->faces.size(); ++i)
 		{
 			uvec3 t(m->faces[i].v[0], m->faces[i].v[1], m->faces[i].v[2]);
 			g->addTriangle(t);
 		}
 
 		g->process();
+		
+		return;
 	}
 
 	printf("Bad pointers given to adapter.");

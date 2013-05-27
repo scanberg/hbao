@@ -74,22 +74,19 @@ void readFace(		const std::string &line,
 void readSG(		const std::string &line,
 					int &sg);
 
-void fillmesh(		Mesh *mesh,
+void readG(			const std::string &line,
+					std::string &name);
+
+Mesh createMesh(	const std::string &name,
 					std::vector<sVertexIndex> &vertexTable,
 					std::vector<Mesh::sFace> &faceTable,
 					std::vector<sVec3> &positionTable,
 					std::vector<sVec3> &normalTable,
 					std::vector<sVec2> &texcoordTable);
 
-bool loadMeshFromObj(const char *filename, Mesh *mesh, float scale)
+Mesh loadMeshFromObj(const char *filename, float scale)
 {
 	printf("Attempting to load mesh->from %s\n", filename);
-
-	if(!mesh)
-	{
-		printf("mesh->handle was null.\n");
-		return false;
-	}
 
 	std::ifstream filehandle;
 	filehandle.open(filename, std::ios::in);
@@ -97,19 +94,20 @@ bool loadMeshFromObj(const char *filename, Mesh *mesh, float scale)
 	if(filehandle.fail())
 	{
 		printf("Could not open file.\n");
-		return false;
+		return Mesh();
 	}
 
 	std::vector<std::list<sVertexIndex> > existingVertexTable;
 
 	std::vector<sVertexIndex>	vertexTable;
-	std::vector<Mesh::sFace>		faceTable;
+	std::vector<Mesh::sFace>	faceTable;
 
 	std::vector<sVec3> positionTable;
 	std::vector<sVec3> normalTable;
 	std::vector<sVec2> texcoordTable;
 
 	std::string line;
+	std::string name(filename);
 	int sg = 0;
 
 	clock_t start, end;
@@ -134,22 +132,102 @@ bool loadMeshFromObj(const char *filename, Mesh *mesh, float scale)
 		else if(line[0] == 's')
 			readSG(line, sg);
 	}
+
+	Mesh m = createMesh(name, vertexTable, faceTable,
+						positionTable, normalTable, texcoordTable);
+
 	printf("done!\n");
 
-	printf("Filling mesh->.. ");
-	fillmesh(	mesh, vertexTable, faceTable,
-				positionTable, normalTable, texcoordTable);
-	printf("done!\n");
+	printf("total vertex count %i\n", vertexTable.size());
+	printf("total face count %i\n", faceTable.size());
 
     end = clock();
     double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    printf("\nTime taken %3.3fs \n", cpu_time_used);
+    printf("Time taken %3.3fs \n", cpu_time_used);
 
-	printf("mesh->consisting of\n");
-	printf("%i vertices\n", mesh->numVertices);
-	printf("%i triangles\n", mesh->numFaces);
+	return m;
+}
 
-	return true;
+std::vector<Mesh> loadMeshesFromObj(const char *filename, float scale)
+{
+	printf("Attempting to load mesh->from %s\n", filename);
+
+	std::ifstream filehandle;
+	filehandle.open(filename, std::ios::in);
+
+	std::vector<Mesh> meshes;
+
+	if(filehandle.fail())
+	{
+		printf("Could not open file.\n");
+		return meshes;
+	}
+
+	std::vector<std::list<sVertexIndex> > existingVertexTable;
+
+	std::vector<sVertexIndex>	vertexTable;
+	std::vector<Mesh::sFace>	faceTable;
+
+	std::vector<sVec3> positionTable;
+	std::vector<sVec3> normalTable;
+	std::vector<sVec2> texcoordTable;
+
+	std::string line;
+	std::string name;
+	int sg = 0;
+	int count = 0;
+
+	clock_t start, end;
+	start = clock();
+
+	printf("Reading data... ");
+
+	while( filehandle.good() && !filehandle.eof() )
+	{
+		std::getline(filehandle, line);
+		if(line[0] == 'v')
+		{
+			if(line[1] == 't')
+				readTexcoord(line, texcoordTable);
+			else if(line[1] == 'n')
+				readNormal(line, normalTable);
+			else
+				readPosition(line, positionTable, scale);
+		}
+		else if(line[0] == 'f')
+			readFace(line, vertexTable, existingVertexTable, faceTable, sg);
+		else if(line[0] == 's')
+			readSG(line, sg);
+		else if(line[0] == 'g')
+		{
+			if(count > 0)
+			{
+				Mesh m = createMesh( name, vertexTable, faceTable,
+								positionTable, normalTable, texcoordTable);
+				meshes.push_back(m);
+			}
+			readG(line, name);
+			printf("new group %s\n", name.c_str());
+			++count;
+		}
+	}
+
+	Mesh m = createMesh(name, vertexTable, faceTable,
+						positionTable, normalTable, texcoordTable);
+	meshes.push_back(m);
+
+	printf("done!\n");
+
+	printf("total vertex count %i\n", vertexTable.size());
+	printf("total face count %i\n", faceTable.size());
+
+    end = clock();
+    double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time taken %3.3fs \n", cpu_time_used);
+
+    //printf("meshes.size() = %i\n", meshes.size());
+
+	return meshes;
 }
 
 bool equal(const sVertexIndex &lhs, const sVertexIndex &rhs)
@@ -318,66 +396,76 @@ void readSG(const std::string &line,
 	sscanf(line.c_str(), "%*s %i", &sg);
 }
 
-void fillmesh(	Mesh *mesh,
+void readG(	const std::string &line,
+			std::string &name)
+{
+	char *str = new char[128];
+	int count = sscanf(line.c_str(), "%*s %s", str);
+
+	if(count > 0)
+		name = std::string(str);
+
+	delete[] str;
+}
+
+Mesh createMesh(const std::string &name,
 				std::vector<sVertexIndex> &vertexTable,
 				std::vector<Mesh::sFace> &faceTable,
 				std::vector<sVec3> &positionTable,
 				std::vector<sVec3> &normalTable,
 				std::vector<sVec2> &texcoordTable )
 {
-	mesh->numVertices = vertexTable.size();
-	mesh->vertices = new Mesh::sVertex[mesh->numVertices];
+	Mesh mesh;
+	mesh.name = name;
 
-	mesh->numFaces = faceTable.size();
-	mesh->faces = new Mesh::sFace[mesh->numFaces];
-
-	for(unsigned int i=0; i<mesh->numVertices; ++i)
+	for(unsigned int i=0; i<vertexTable.size(); ++i)
 	{
 		int pos, norm, tc;
 		pos = vertexTable[i].position;
 		norm = vertexTable[i].normal;
 		tc = vertexTable[i].texcoord;
 
+		mesh.vertices.push_back(Mesh::sVertex());
+
 		if(pos > -1 && pos < (int)positionTable.size())
 		{
-			mesh->vertices[i].x = positionTable[pos].x;
-			mesh->vertices[i].y = positionTable[pos].y;
-			mesh->vertices[i].z = positionTable[pos].z;
+			mesh.vertices[i].x = positionTable[pos].x;
+			mesh.vertices[i].y = positionTable[pos].y;
+			mesh.vertices[i].z = positionTable[pos].z;
 		}
 		else
 		{
-			mesh->vertices[i].x = 0.0f;
-			mesh->vertices[i].y = 0.0f;
-			mesh->vertices[i].z = 0.0f;
+			mesh.vertices[i].x = 0.0f;
+			mesh.vertices[i].y = 0.0f;
+			mesh.vertices[i].z = 0.0f;
 		}
 
 		if(norm > -1 && norm < (int)normalTable.size())
 		{
-			mesh->vertices[i].nx = normalTable[norm].x;
-			mesh->vertices[i].ny = normalTable[norm].y;
-			mesh->vertices[i].nz = normalTable[norm].z;
+			mesh.vertices[i].nx = normalTable[norm].x;
+			mesh.vertices[i].ny = normalTable[norm].y;
+			mesh.vertices[i].nz = normalTable[norm].z;
 		}
 		else
 		{
-			mesh->vertices[i].nx = 0.0f;
-			mesh->vertices[i].ny = 0.0f;
-			mesh->vertices[i].nz = 0.0f;
+			mesh.vertices[i].nx = 0.0f;
+			mesh.vertices[i].ny = 0.0f;
+			mesh.vertices[i].nz = 0.0f;
 		}
 
 		if(tc > -1 && tc < (int)texcoordTable.size())
 		{
-			mesh->vertices[i].u = texcoordTable[norm].x;
-			mesh->vertices[i].v = texcoordTable[norm].y;
+			mesh.vertices[i].u = texcoordTable[norm].x;
+			mesh.vertices[i].v = texcoordTable[norm].y;
 		}
 		else
 		{
-			mesh->vertices[i].u = 0.0f;
-			mesh->vertices[i].v = 0.0f;
+			mesh.vertices[i].u = 0.0f;
+			mesh.vertices[i].v = 0.0f;
 		}
 	}
 
-	for(unsigned int i=0; i<mesh->numFaces; ++i)
-	{
-		mesh->faces[i] = faceTable[i];
-	}
+	mesh.faces = faceTable;
+
+	return mesh;
 }

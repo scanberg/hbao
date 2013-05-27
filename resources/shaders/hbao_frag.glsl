@@ -14,10 +14,11 @@ uniform vec2 LinMAD;// = vec2(0.1-10.0, 0.1+10.0) / (2.0*0.1*10.0);
 
 uniform vec2 AORes = vec2(1024.0, 768.0);
 uniform vec2 InvAORes = vec2(1.0/1024.0, 1.0/768.0);
+uniform vec2 NoiseScale = vec2(1024.0, 768.0) / 4.0;
 
-uniform float Radius = 0.2;
-uniform float Radius2 = 0.2*0.2;
-uniform float NegInvR2 = - 1.0 / (0.2*0.2);
+uniform float R = 0.3;
+uniform float R2 = 0.3*0.3;
+uniform float NegInvR2 = - 1.0 / (0.3*0.3);
 uniform float TanBias = tan(30.0 * PI / 180.0);
 
 in vec2 TexCoord;
@@ -25,11 +26,12 @@ in vec2 Position;
 
 out vec3 out_frag0;
 
-float LinearizeDepth(float d)
+float ViewSpaceZFromDepth(float d)
 {
+	// [0,1] linear depth -> [-1,1] clip space
 	d = d * 2.0 - 1.0;
 	// Linearize the depth value
-	return 1.0 / (LinMAD.x * d + LinMAD.y);
+	return -1.0 / (LinMAD.x * d + LinMAD.y);
 }
 
 vec3 UVToViewSpace(vec2 uv, float z)
@@ -40,14 +42,14 @@ vec3 UVToViewSpace(vec2 uv, float z)
 
 vec3 GetViewPosFront(vec2 uv)
 {
-	float z = LinearizeDepth(texture(texture0, uv).r);
-	return UVToViewSpace(uv, -z);
+	float z = ViewSpaceZFromDepth(texture(texture0, uv).r);
+	return UVToViewSpace(uv, z);
 }
 
 vec3 GetViewPosBack(vec2 uv)
 {
-	float z = LinearizeDepth(texture(texture1, uv).r);
-	return UVToViewSpace(uv, -z);
+	float z = ViewSpaceZFromDepth(texture(texture1, uv).r);
+	return UVToViewSpace(uv, z);
 }
 
 float TanToSin(float x)
@@ -125,7 +127,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 		tanS = Tangent(P, FS);
 		d2 = Length2(FS - P);
 
-		if(d2 < Radius2 && tanS > tanH)
+		if(d2 < R2 && tanS > tanH)
 		{
 			float sinS = TanToSin(tanS);
 			ao += Falloff(d2) * (sinS - sinH);
@@ -138,7 +140,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 		// tanS = Tangent(P, BS);
 		// d2 = Length2(BS - P);
 
-		// if(d2 < Radius2 && tanS > tanH)
+		// if(d2 < R2 && tanS > tanH)
 		// {
 		//	float sinS = TanToSin(tanS);
 		//	ao += Falloff(d2) * (sinS - sinH);
@@ -159,15 +161,13 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
 
 void main(void)
 {
-	const float numDirections = 16.0;
+	const float numDirections = 6.0;
 	const int numSamples = 6;
 	const float strength = 1.0;
 
 	vec3 P = GetViewPosFront(TexCoord);
 
-	vec2 noiseScale = AORes / 4.0;
-	vec3 random = texture(texture2, Position.xy * noiseScale).rgb;
-	//random.xy = normalize(random.xy);
+	vec3 random = texture(texture2, Position.xy * NoiseScale).rgb;
 
 	vec3 Pr, Pl, Pt, Pb;
     Pr = GetViewPosFront(TexCoord + vec2(InvAORes.x, 0));
@@ -177,10 +177,10 @@ void main(void)
 
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
-    dPdu = normalize(dPdu);
-    dPdv = normalize(dPdv);
+    //dPdu = normalize(dPdu);
+    //dPdv = normalize(dPdv);
 
-    vec2 rayRadiusUV = 0.5 * Radius * FocalLen / -P.z;
+    vec2 rayRadiusUV = 0.5 * R * FocalLen / -P.z;
     float rayRadiusPix = rayRadiusUV.x * AORes.x;
 
     float ao = 1.0;
