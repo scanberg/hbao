@@ -21,17 +21,17 @@ uniform float R2 = 0.3*0.3;
 uniform float NegInvR2 = - 1.0 / (0.3*0.3);
 uniform float TanBias = tan(30.0 * PI / 180.0);
 
-uniform int NumDirections = 4;
-uniform int NumSamples = 4;
+uniform int NumDirections = 6;
+uniform int NumSamples = 6;
 
 in vec2 TexCoord;
 in vec2 Position;
 
-out vec3 out_frag0;
+out float out_frag0;
 
 float ViewSpaceZFromDepth(float d)
 {
-	// [0,1] linear depth -> [-1,1] clip space
+	// [0,1] -> [-1,1] clip space
 	d = d * 2.0 - 1.0;
 	// Linearize the depth value
 	return -1.0 / (LinMAD.x * d + LinMAD.y);
@@ -166,7 +166,7 @@ void main(void)
 {
 	float numDirections = NumDirections;
 	int numSamples = NumSamples;
-	const float strength = 1.0;
+	const float strength = 1.8;
 
 	vec3 P = GetViewPosFront(TexCoord);
 
@@ -214,5 +214,5 @@ void main(void)
 	//float frontZ = P.z;
 	//float backZ = texture(texture1, TexCoord).r;
 
-	out_frag0 = vec3(ao);
+	out_frag0 = ao;
 }

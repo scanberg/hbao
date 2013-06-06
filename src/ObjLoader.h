@@ -23,7 +23,7 @@ class Mesh
 	std::vector<sFace> faces;
 
 	std::string name;
-
+	std::string material;
 };
 
 Mesh loadMeshFromObj(const char* filename, float scale = 1.0f);

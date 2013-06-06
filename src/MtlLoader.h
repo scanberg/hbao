@@ -5,11 +5,12 @@
 
 class Material
 {
+public:
 	typedef struct
 	{
 		float r,g,b;
 	}sColor;
-public:
+
 	float specularExponent;
 	
 	sColor ambientColor;
@@ -26,4 +27,4 @@ public:
 	std::string name;
 };
 
-std::vector<Material> loadMaterialFromMtl(const char *filename);
+std::vector<Material> loadMaterialsFromMtl(const char *filename);

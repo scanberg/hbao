@@ -1,27 +1,29 @@
 #include "MtlLoader.h"
 
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 
 void readFloat(const std::string &line, float &val);
-void readColor(const std::string &line, sColor &val);
+void readColor(const std::string &line, Material::sColor &val);
 void readString(const std::string &line, std::string &val);
 
-std::vector<Material> loadMaterialFromMtl(const char *filename)
+std::vector<Material> loadMaterialsFromMtl(const char *filename)
 {
 	printf("Attempting to load materials from %s\n", filename);
 
 	std::ifstream filehandle;
 	filehandle.open(filename, std::ios::in);
 
+	std::vector<Material> materials;
+
 	if(filehandle.fail())
 	{
 		printf("Could not open file.\n");
-		return Mesh();
+		return materials;
 	}
 
-	std::vector<Material> materials;
 	int success;
 	int count=0;
 
@@ -41,31 +43,32 @@ std::vector<Material> loadMaterialFromMtl(const char *filename)
 		success = sscanf(line.c_str(), "%s ", str);
 		if(success)
 		{
-			if(strcmp(str, "newmtl"))
+			if(strcmp(str, "newmtl") == 0)
 			{
 				if(count > 0)
 					materials.push_back(mat);
 
-				readString(mat.name);
+				mat = Material();
+				readString(line, mat.name);
 				++count;
 			}
-			else if(strcmp(str, "Ns"))
+			else if(strcmp(str, "Ns") == 0)
 				readFloat(line, mat.specularExponent);
-			else if(strcmp(str, "Ka"))
+			else if(strcmp(str, "Ka") == 0)
 				readColor(line, mat.ambientColor);
-			else if(strcmp(str, "Kd"))
+			else if(strcmp(str, "Kd") == 0)
 				readColor(line, mat.diffuseColor);
-			else if(strcmp(str, "Ks"))
+			else if(strcmp(str, "Ks") == 0)
 				readColor(line, mat.specularColor);
-			else if(strcmp(str, "Ke"))
+			else if(strcmp(str, "Ke") == 0)
 				readColor(line, mat.emissiveColor);
-			else if(strcmp(str, "map_Ka"))
+			else if(strcmp(str, "map_Ka") == 0)
 				readString(line, mat.ambientMap);
-			else if(strcmp(str, "map_Kd"))
+			else if(strcmp(str, "map_Kd") == 0)
 				readString(line, mat.diffuseMap);
-			else if(strcmp(str, "map_bump"))
+			else if(strcmp(str, "map_bump") == 0)
 				readString(line, mat.normalMap);
-			else if(strcmp(str, "map_d"))
+			else if(strcmp(str, "map_d") == 0)
 				readString(line, mat.maskMap);
 		}
 	}
@@ -89,7 +92,7 @@ void readFloat(const std::string &line, float &val)
 	sscanf(line.c_str(), "%*s %f", &val);
 }
 
-void readColor(const std::string &line, sVec3 &val)
+void readColor(const std::string &line, Material::sColor &val)
 {
 	sscanf(line.c_str(), "%*s %f %f %f", &val.r, &val.g, &val.b);
 }

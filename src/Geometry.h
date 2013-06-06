@@ -75,6 +75,11 @@ public:
 
     void draw();
 
+    void bindVAO();
+    void unbindVAO();
+
+    std::string material;
+
 private:
 
     u32 vao;

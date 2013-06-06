@@ -1,14 +1,20 @@
 #version 150
 
+uniform sampler2D texture0;
+uniform sampler2D texture1;
+
 out vec4 out_frag0;
-out float out_frag1;
 
 in float Depth;
-in float Z;
+
+in vec2 TexCoord;
 
 void main(void)
 {
-	out_frag0 = vec4(1.0, 0.0, 0.0, 1.0);
-	//out_frag1 = Depth;
-	out_frag1 = Z;
+	vec4 diffuseAndMask = texture(texture0, TexCoord);
+
+	if( diffuseAndMask.a < 0.5)
+		discard;
+
+	out_frag0 = vec4(diffuseAndMask.rgb, 1.0);
 }

@@ -1,4 +1,4 @@
-Sources		= main.cpp Camera.cpp Shader.cpp Framebuffer2D.cpp Log.cpp Geometry.cpp ObjLoader.cpp Tokenizer.cpp
+Sources		= main.cpp Camera.cpp Shader.cpp Framebuffer2D.cpp Log.cpp Geometry.cpp ObjLoader.cpp Surface.cpp MtlLoader.cpp
 
 CFlags 		= -c -Wall -g -O3
 LDFlags 	= 

@@ -336,6 +336,17 @@ void Geometry::draw()
     }
 }
 
+void Geometry::bindVAO()
+{
+    if(vao)
+        glBindVertexArray(vao);
+}
+
+void Geometry::unbindVAO()
+{
+    glBindVertexArray(0);
+}
+
 vec3 calculateTangent(glm::vec3 v1, glm::vec3 v2, glm::vec2 st1, glm::vec2 st2)
 {
     vec3 tangent;

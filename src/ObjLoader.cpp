@@ -26,6 +26,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <string>
 #include <cstdio>
 #include <ctime>
+#include <cstring>
 #include <fstream>
 #include <vector>
 #include <list>
@@ -77,7 +78,8 @@ void readSG(		const std::string &line,
 void readG(			const std::string &line,
 					std::string &name);
 
-Mesh createMesh(	const std::string &name,
+void fillMesh(		Mesh &mesh,
+					const std::string &name,
 					std::vector<sVertexIndex> &vertexTable,
 					std::vector<Mesh::sFace> &faceTable,
 					std::vector<sVec3> &positionTable,
@@ -133,8 +135,9 @@ Mesh loadMeshFromObj(const char *filename, float scale)
 			readSG(line, sg);
 	}
 
-	Mesh m = createMesh(name, vertexTable, faceTable,
-						positionTable, normalTable, texcoordTable);
+	Mesh m;
+	fillMesh(	m, name, vertexTable, faceTable,
+				positionTable, normalTable, texcoordTable);
 
 	printf("done!\n");
 
@@ -174,6 +177,7 @@ std::vector<Mesh> loadMeshesFromObj(const char *filename, float scale)
 
 	std::string line;
 	std::string name;
+	std::string material;
 	int sg = 0;
 	int count = 0;
 
@@ -200,29 +204,45 @@ std::vector<Mesh> loadMeshesFromObj(const char *filename, float scale)
 			readSG(line, sg);
 		else if(line[0] == 'g')
 		{
-			if(count > 0)
-			{
-				Mesh m = createMesh( name, vertexTable, faceTable,
-								positionTable, normalTable, texcoordTable);
-				meshes.push_back(m);
-			}
 			readG(line, name);
-			printf("new group %s\n", name.c_str());
-			++count;
+		}
+		else if(line[0] == 'u')
+		{
+			char str[32];
+			char mtl[128];
+			int success = sscanf(line.c_str(), "%s %s", str, mtl);
+			if(success && strcmp(str, "usemtl") == 0)
+			{
+				if(count > 0)
+				{
+					meshes.push_back(Mesh());
+					fillMesh(	meshes[count-1], name, vertexTable, faceTable,
+								positionTable, normalTable, texcoordTable);
+					meshes[count-1].material = material;
+					vertexTable.clear();
+					faceTable.clear();
+					existingVertexTable.clear();
+				}
+				++count;
+
+				if(success > 1)
+					material = std::string(mtl);
+			}
 		}
 	}
 
 	if(count > 0)
 	{
-		Mesh m = createMesh(name, vertexTable, faceTable,
-							positionTable, normalTable, texcoordTable);
-		meshes.push_back(m);
+		meshes.push_back(Mesh());
+		fillMesh(	meshes[count-1], name, vertexTable, faceTable,
+					positionTable, normalTable, texcoordTable);
+		meshes[count-1].material = material;
 	}
 
 	printf("done!\n");
 
-	printf("total vertex count %i\n", vertexTable.size());
-	printf("total face count %i\n", faceTable.size());
+	//printf("total vertex count %i\n", vertexTable.size());
+	//printf("total face count %i\n", faceTable.size());
 
     end = clock();
     double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
@@ -355,8 +375,8 @@ void readFace(	const std::string &line,
 	{
 		int p = sscanf(c[i], "%i/%i/%i", &params[0], &params[1], &params[2]);
 		position[i] = (p > 0 && params[0] > 0) ? params[0]-1 : -1;
-		normal[i] 	= (p > 1 && params[1] > 0) ? params[1]-1 : -1;
-		texcoord[i] = (p > 2 && params[2] > 0) ? params[2]-1 : -1;
+		texcoord[i] = (p > 1 && params[1] > 0) ? params[1]-1 : -1;
+		normal[i] 	= (p > 2 && params[2] > 0) ? params[2]-1 : -1;
 	}
 
 	delete[] buffer;
@@ -411,14 +431,14 @@ void readG(	const std::string &line,
 	delete[] str;
 }
 
-Mesh createMesh(const std::string &name,
+void fillMesh(	Mesh &mesh,
+				const std::string &name,
 				std::vector<sVertexIndex> &vertexTable,
 				std::vector<Mesh::sFace> &faceTable,
 				std::vector<sVec3> &positionTable,
 				std::vector<sVec3> &normalTable,
 				std::vector<sVec2> &texcoordTable )
 {
-	Mesh mesh;
 	mesh.name = name;
 
 	for(unsigned int i=0; i<vertexTable.size(); ++i)
@@ -438,6 +458,7 @@ Mesh createMesh(const std::string &name,
 		}
 		else
 		{
+			printf("pos out of bounds: %i and size is %i \n", pos, (int)positionTable.size());
 			mesh.vertices[i].x = 0.0f;
 			mesh.vertices[i].y = 0.0f;
 			mesh.vertices[i].z = 0.0f;
@@ -451,6 +472,7 @@ Mesh createMesh(const std::string &name,
 		}
 		else
 		{
+			//printf("norm out of bounds: %i and size is %i \n", norm, (int)normalTable.size());
 			mesh.vertices[i].nx = 0.0f;
 			mesh.vertices[i].ny = 0.0f;
 			mesh.vertices[i].nz = 0.0f;
@@ -458,17 +480,16 @@ Mesh createMesh(const std::string &name,
 
 		if(tc > -1 && tc < (int)texcoordTable.size())
 		{
-			mesh.vertices[i].u = texcoordTable[norm].x;
-			mesh.vertices[i].v = texcoordTable[norm].y;
+			mesh.vertices[i].u = texcoordTable[tc].x;
+			mesh.vertices[i].v = texcoordTable[tc].y;
 		}
 		else
 		{
+			//printf("tc out of bounds: %i and size is %i \n", tc, (int)texcoordTable.size());
 			mesh.vertices[i].u = 0.0f;
 			mesh.vertices[i].v = 0.0f;
 		}
 	}
 
 	mesh.faces = faceTable;
-
-	return mesh;
 }
