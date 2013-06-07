@@ -18,7 +18,7 @@
 #define AO_HEIGHT (HEIGHT/2)
 #define AO_RADIUS 0.3
 
-#define NOISE_RES 8
+#define NOISE_RES 4
 
 #define MOVE_SPEED 3.5
 #define MOUSE_SPEED 9.5
@@ -47,6 +47,7 @@ Shader * hbaoShader;
 Shader * ssaoShader;
 Shader * blurXShader;
 Shader * blurYShader;
+Shader * downsampleShader;
 
 Framebuffer2D * fboFullRes;
 Framebuffer2D * fboHalfRes;
@@ -78,6 +79,8 @@ int main()
     // RENDER BUNNY PASS
     glEnable(GL_DEPTH_TEST);
 
+    glDepthMask(1);
+
     fboFullRes->bind();
     glClearColor(1.0, 1.0, 1.0, 0.0);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -91,20 +94,36 @@ int main()
 
     mdl->draw();
 
-    // AO pass
-
     glDisable(GL_DEPTH_TEST);
+    glColorMask(0, 0, 0, 0);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
+    // Downsample depth
+    fboHalfRes->bind();
+
+    downsampleShader->bind();
+
+    fsquad->draw();
+
+    glColorMask(1, 1, 1, 1);
+    glDepthMask(0);
+
+    // AO pass
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_DEPTH));
+    //glBindTexture(GL_TEXTURE_2D, noiseTexture);
+
+    //glActiveTexture(GL_TEXTURE1);
+    //glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
 
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
-    fboHalfRes->bind();
+    buffer[0] = GL_COLOR_ATTACHMENT0;
+    glDrawBuffers(1, buffer);
 
     hbaoShader->bind();
     //ssaoShader->bind();
@@ -186,38 +205,37 @@ void init()
 
   mdl->addGeometryAndSurface(&dragon, surface);
 
-  Geometry floor;
+  // Geometry floor;
 
-  Geometry::sVertex v;
-  v.position = vec3(-1, 0,-1); v.texCoord = vec2(0,0); floor.addVertex(v);
-  v.position = vec3( 1, 0,-1); v.texCoord = vec2(1,0); floor.addVertex(v);
-  v.position = vec3( 1, 0, 1); v.texCoord = vec2(1,1); floor.addVertex(v);
-  v.position = vec3(-1, 0, 1); v.texCoord = vec2(0,1); floor.addVertex(v);
+  // Geometry::sVertex v;
+  // v.position = vec3(-1, 0,-1); v.texCoord = vec2(0,0); floor.addVertex(v);
+  // v.position = vec3( 1, 0,-1); v.texCoord = vec2(1,0); floor.addVertex(v);
+  // v.position = vec3( 1, 0, 1); v.texCoord = vec2(1,1); floor.addVertex(v);
+  // v.position = vec3(-1, 0, 1); v.texCoord = vec2(0,1); floor.addVertex(v);
 
-  floor.addTriangle(uvec3(0,2,1));
-  floor.addTriangle(uvec3(0,3,2));
+  // floor.addTriangle(uvec3(0,2,1));
+  // floor.addTriangle(uvec3(0,3,2));
 
-  mdl->addGeometryAndSurface(&floor, surface);
+  // mdl->addGeometryAndSurface(&floor, surface);
 
-	//model = new Geometry();
   //Mesh mesh = loadMeshFromObj("resources/meshes/sponza.obj", 0.01f);
 
-  //std::vector<Mesh> meshes = loadMeshesFromObj("resources/meshes/sponza.obj", 0.01f);
-  //std::vector<Geometry> geometries = createGeometryFromMesh(meshes);
+  std::vector<Mesh> meshes = loadMeshesFromObj("resources/meshes/sponza.obj", 0.01f);
+  std::vector<Geometry> geometries = createGeometryFromMesh(meshes);
 
-  //std::vector<Material> materials = loadMaterialsFromMtl("resources/meshes/sponza.mtl");
-  //surfaces = createSurfaceFromMaterial(materials, "resources/meshes/");
+  std::vector<Material> materials = loadMaterialsFromMtl("resources/meshes/sponza.mtl");
+  surfaces = createSurfaceFromMaterial(materials, "resources/meshes/");
 
-  //for(unsigned int i=0; i<geometries.size(); ++i)
-  //{
-  //  mdl->addGeometryAndSurface(&geometries[i], surfaces[geometries[i].material]);
-  //}
+  for(unsigned int i=0; i<geometries.size(); ++i)
+  {
+    mdl->addGeometryAndSurface(&geometries[i], surfaces[geometries[i].material]);
+  }
 
   mdl->prepare();
 
   fsquad = new Geometry();
 
-  //Geometry::sVertex v;
+  Geometry::sVertex v;
   v.position = vec3(-1,-1, 0); v.texCoord = vec2(0,0); fsquad->addVertex(v);
   v.position = vec3( 1,-1, 0); v.texCoord = vec2(1,0); fsquad->addVertex(v);
   v.position = vec3( 1, 1, 0); v.texCoord = vec2(1,1); fsquad->addVertex(v);
@@ -248,6 +266,9 @@ void init()
   blurYShader = new Shader("resources/shaders/fullscreen_vert.glsl",
                 "resources/shaders/blur_y_frag.glsl");
 
+  downsampleShader = new Shader("resources/shaders/fullscreen_vert.glsl",
+                    "resources/shaders/downsample_depth_frag.glsl");
+
   // Full res deferred base
   fboFullRes = new Framebuffer2D(WIDTH, HEIGHT);
   fboFullRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
@@ -257,6 +278,7 @@ void init()
 
   // Half res buffer for AO
   fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
+  fboHalfRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboHalfRes->attachBuffer(FBO_AUX0, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
   float fovRad = cam->getFov() * 3.14159265f / 180.0f;
@@ -317,9 +339,9 @@ void init()
 
   blurYShader->bind();
   pos = blurYShader->getUniformLocation("AORes");
-  glUniform2f(pos, WIDTH, HEIGHT);
+  glUniform2f(pos, AO_WIDTH, AO_HEIGHT);
   pos = blurYShader->getUniformLocation("InvAORes");
-  glUniform2f(pos, 1.0f/WIDTH, 1.0f/HEIGHT);
+  glUniform2f(pos, 1.0f/AO_WIDTH, 1.0f/AO_HEIGHT);
   pos = blurYShader->getUniformLocation("InvDepthRes");
   glUniform2f(pos, 1.0f/WIDTH, 1.0f/HEIGHT);
   pos = blurYShader->getUniformLocation("LinMAD");
@@ -345,6 +367,7 @@ void cleanUp()
   delete compositShader;
   delete blurXShader;
   delete blurYShader;
+  delete downsampleShader;
 
   delete fboFullRes;
   delete fboHalfRes;

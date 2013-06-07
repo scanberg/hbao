@@ -10,6 +10,7 @@ uniform vec2 InvDepthRes = 1.0 / vec2(1024.0, 768.0);
 uniform vec2 LinMAD;
 
 uniform float Threshold = 0.1;
+uniform float DepthFalloff = 10.0;
 
 uniform float sigma = 25.0;
 
@@ -35,7 +36,7 @@ vec2 PointSampleAOZ(vec2 uv)
 {
 	ivec2 coord = ivec2(round(TexCoord * AORes + uv*InvAORes));
 	return vec2(texelFetch(texture0, coord, 0).r,
-    			ViewSpaceZFromDepth(texelFetch(texture1, coord, 0).r));
+    			ViewSpaceZFromDepth(texture(texture1, TexCoord + uv*InvDepthRes).r));
 }
 
 float GaussianWeight(vec2 coord)
@@ -50,7 +51,7 @@ float GaussianWeight(vec2 coord)
 float ZWeight(float center, float z)
 {
 	const float epsilon = 0.01;
-	return 1.0 / (epsilon + abs(center - z) * 10.0);
+	return 1.0 / (epsilon + abs(center - z) * DepthFalloff);
 	//return float(abs(center - z) < Threshold);
 }
 
