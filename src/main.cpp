@@ -14,11 +14,13 @@
 #define WIDTH 1024
 #define HEIGHT 768
 
-#define AO_WIDTH (WIDTH/2)
-#define AO_HEIGHT (HEIGHT/2)
+#define AO_WIDTH (WIDTH)
+#define AO_HEIGHT (HEIGHT)
 #define AO_RADIUS 0.3
+#define AO_DIRS 6
+#define AO_SAMPLES 3
 
-#define NOISE_RES 4
+#define NOISE_RES 8
 
 #define MOVE_SPEED 3.5
 #define MOUSE_SPEED 9.5
@@ -76,10 +78,11 @@ int main()
 
     cam->setup();
 
-    // RENDER BUNNY PASS
+    // RENDER GEOMETRY PASS
     glEnable(GL_DEPTH_TEST);
-
-    glDepthMask(1);
+    glCullFace(GL_BACK);
+    glDepthFunc(GL_LESS);
+    //glDepthMask(1);
 
     fboFullRes->bind();
     glClearColor(1.0, 1.0, 1.0, 0.0);
@@ -87,33 +90,35 @@ int main()
 
     geometryShader->bind();
 
-    glCullFace(GL_BACK);
-
     glUniformMatrix4fv(geometryBackShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
     glUniformMatrix4fv(geometryBackShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
 
     mdl->draw();
 
     glDisable(GL_DEPTH_TEST);
-    glColorMask(0, 0, 0, 0);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
+    // glColorMask(0, 0, 0, 0);
+    // glDepthFunc(GL_ALWAYS);
 
-    // Downsample depth
-    fboHalfRes->bind();
+    // glActiveTexture(GL_TEXTURE0);
+    // glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
-    downsampleShader->bind();
+    // // Downsample depth
+    // fboHalfRes->bind();
+    // //glClear(GL_DEPTH_BUFFER_BIT);
+    // //glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 
-    fsquad->draw();
+    // downsampleShader->bind();
 
-    glColorMask(1, 1, 1, 1);
-    glDepthMask(0);
+    // fsquad->draw();
+
+    // glColorMask(1, 1, 1, 1);
+    // glDepthMask(0);
 
     // AO pass
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_DEPTH));
+    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
     //glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
     //glActiveTexture(GL_TEXTURE1);
@@ -122,7 +127,9 @@ int main()
     glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
-    buffer[0] = GL_COLOR_ATTACHMENT0;
+    //fboHalfRes->bind();
+
+    buffer[0] = GL_COLOR_ATTACHMENT2;
     glDrawBuffers(1, buffer);
 
     hbaoShader->bind();
@@ -131,31 +138,31 @@ int main()
     fsquad->draw();
 
     // BLUR 
-    fboFullRes->bind();
+    //fboFullRes->bind();
 
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
     // X
-    buffer[0] = GL_COLOR_ATTACHMENT2;
+    buffer[0] = GL_COLOR_ATTACHMENT3;
     glDrawBuffers(1, buffer);
 
     blurXShader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX0));
+    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
     fsquad->draw();
 
     // Y
 
-    buffer[0] = GL_COLOR_ATTACHMENT1;
+    buffer[0] = GL_COLOR_ATTACHMENT2;
     glDrawBuffers(1, buffer);
 
     blurYShader->bind();
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
+    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX3));
 
     fsquad->draw();
 
@@ -167,7 +174,7 @@ int main()
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX0));
 
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
+    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
     glClearColor(1.0, 1.0, 1.0, 0.0);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -273,13 +280,14 @@ void init()
   fboFullRes = new Framebuffer2D(WIDTH, HEIGHT);
   fboFullRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboFullRes->attachBuffer(FBO_AUX0, GL_RGBA8, GL_RGBA, GL_FLOAT);
-  fboFullRes->attachBuffer(FBO_AUX1, GL_R8, GL_RED, GL_FLOAT);
+  fboFullRes->attachBuffer(FBO_AUX1, GL_RG16F, GL_RG, GL_FLOAT);
   fboFullRes->attachBuffer(FBO_AUX2, GL_R8, GL_RED, GL_FLOAT);
+  fboFullRes->attachBuffer(FBO_AUX3, GL_R8, GL_RED, GL_FLOAT);
 
   // Half res buffer for AO
-  fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
-  fboHalfRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
-  fboHalfRes->attachBuffer(FBO_AUX0, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  // fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
+  // fboHalfRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
+  // fboHalfRes->attachBuffer(FBO_AUX0, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
   float fovRad = cam->getFov() * 3.14159265f / 180.0f;
 
@@ -323,15 +331,19 @@ void init()
   glUniform1f(pos, -1.0f / (AO_RADIUS*AO_RADIUS));
 
   pos = hbaoShader->getUniformLocation("NoiseScale");
-  glUniform2f(pos,
-              AO_WIDTH/(float)NOISE_RES,
-              AO_HEIGHT/(float)NOISE_RES);
+  glUniform2f(pos, AO_WIDTH/(float)NOISE_RES, AO_HEIGHT/(float)NOISE_RES);
+  pos = hbaoShader->getUniformLocation("NumDirections");
+  glUniform1i(pos, AO_DIRS);
+  pos = hbaoShader->getUniformLocation("NumSamples");
+  glUniform1i(pos, AO_SAMPLES);
 
   blurXShader->bind();
   pos = blurXShader->getUniformLocation("AORes");
   glUniform2f(pos, AO_WIDTH, AO_HEIGHT);
   pos = blurXShader->getUniformLocation("InvAORes");
   glUniform2f(pos, 1.0f/AO_WIDTH, 1.0f/AO_HEIGHT);
+  pos = blurXShader->getUniformLocation("DepthRes");
+  glUniform2f(pos, WIDTH, HEIGHT);
   pos = blurXShader->getUniformLocation("InvDepthRes");
   glUniform2f(pos, 1.0f/WIDTH, 1.0f/HEIGHT);
   pos = blurXShader->getUniformLocation("LinMAD");
@@ -342,6 +354,8 @@ void init()
   glUniform2f(pos, AO_WIDTH, AO_HEIGHT);
   pos = blurYShader->getUniformLocation("InvAORes");
   glUniform2f(pos, 1.0f/AO_WIDTH, 1.0f/AO_HEIGHT);
+  pos = blurYShader->getUniformLocation("DepthRes");
+  glUniform2f(pos, WIDTH, HEIGHT);
   pos = blurYShader->getUniformLocation("InvDepthRes");
   glUniform2f(pos, 1.0f/WIDTH, 1.0f/HEIGHT);
   pos = blurYShader->getUniformLocation("LinMAD");
@@ -370,7 +384,7 @@ void cleanUp()
   delete downsampleShader;
 
   delete fboFullRes;
-  delete fboHalfRes;
+  //delete fboHalfRes;
 
   for(std::map<std::string, Surface*>::iterator it = surfaces.begin(); it != surfaces.end(); ++it)
     delete it->second;

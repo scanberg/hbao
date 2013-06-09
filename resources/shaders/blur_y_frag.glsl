@@ -10,9 +10,9 @@ uniform vec2 InvDepthRes = 1.0 / vec2(1024.0, 768.0);
 uniform vec2 LinMAD;
 
 uniform float Threshold = 0.1;
-uniform float DepthFalloff = 10.0;
+uniform float DepthFalloff = 1.0;
 
-uniform float sigma = 25.0;
+uniform float sigma = 35.0;
 
 out float out_frag0;
 
@@ -57,7 +57,7 @@ float ZWeight(float center, float z)
 
 void main(void)
 {
-	vec2 aoz = PointSampleAOZ(vec2(0.0));
+	vec2 aoz = SampleAOZ(vec2(0.0));
 	float center_depth = aoz.y;
 
 	float w = GaussianWeight(vec2(0));
