@@ -20,6 +20,6 @@ void main(void)
 	out_frag0 = vec4(color.rgb * ao, color.a);
 	//out_frag0 = vec4(color.rgb, 1.0);
 	//out_frag0 = vec4(abs(ao - viewSpacePos)*10, 1.0);
-	//out_frag0 = vec4(vec3(ao), 1.0);
+	out_frag0 = vec4(vec3(ao), 1.0);
 	//out_frag0 = vec4(viewSpacePos, 1.0);
 }

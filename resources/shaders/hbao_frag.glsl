@@ -33,7 +33,8 @@ float ViewSpaceZFromDepth(float d)
 {
 	// [0,1] -> [-1,1] clip space
 	d = d * 2.0 - 1.0;
-	// Linearize the depth value
+
+	// Get view space Z
 	return -1.0 / (LinMAD.x * d + LinMAD.y);
 }
 
