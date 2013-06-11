@@ -10,7 +10,7 @@ typedef enum
 	A
 }Target;
 
-GLuint createTexture(	bool mipmap, GLint internalFormat, GLint format, GLint type,
+GLuint createTexture(	bool mipmap, GLint internalFormat, GLenum format, GLenum type,
 						GLint width, GLint height, unsigned char *data)
 {
 	if(width == 0 || height == 0)
@@ -21,8 +21,19 @@ GLuint createTexture(	bool mipmap, GLint internalFormat, GLint format, GLint typ
 
 	glBindTexture(GL_TEXTURE_2D, texID);
 
-	glTexStorage2D(GL_TEXTURE_2D, mipmap ? 4 : 1, internalFormat, width, height);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, type, data);
+	//glTexStorage2D(GL_TEXTURE_2D, mipmap ? 4 : 1, internalFormat, width, height);
+	//glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, format, type, data);
+
+	glTexImage2D(	GL_TEXTURE_2D,
+ 					0,
+ 					internalFormat,
+ 					width,
+ 					height,
+ 					0,
+ 			  		format,
+ 					type,
+ 					data);
+
 	if(mipmap)
 		glGenerateMipmap(GL_TEXTURE_2D);
 

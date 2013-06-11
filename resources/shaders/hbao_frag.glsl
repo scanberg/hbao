@@ -4,7 +4,6 @@ const float PI = 3.14159265;
 
 uniform sampler2D texture0;
 uniform sampler2D texture1;
-uniform sampler2D texture2;
 
 uniform vec2 FocalLen;
 uniform vec2 UVToViewA;
@@ -44,15 +43,10 @@ vec3 UVToViewSpace(vec2 uv, float z)
 	return vec3(uv * z, z);
 }
 
-vec3 GetViewPosFront(vec2 uv)
+vec3 GetViewPos(vec2 uv)
 {
-	float z = ViewSpaceZFromDepth(texture(texture0, uv).r);
-	return UVToViewSpace(uv, z);
-}
-
-vec3 GetViewPosBack(vec2 uv)
-{
-	float z = ViewSpaceZFromDepth(texture(texture1, uv).r);
+	//float z = ViewSpaceZFromDepth(texture(texture0, uv).r);
+	float z = texture(texture0, uv).r;
 	return UVToViewSpace(uv, z);
 }
 
@@ -127,7 +121,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 	for(int s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
-		FS = GetViewPosFront(uv);
+		FS = GetViewPos(uv);
 		tanS = Tangent(P, FS);
 		d2 = Length2(FS - P);
 
@@ -167,22 +161,21 @@ void main(void)
 {
 	float numDirections = NumDirections;
 	int numSamples = NumSamples;
-	const float strength = 1.8;
+	const float strength = 1.9;
 
-	vec3 P = GetViewPosFront(TexCoord);
+	vec3 P = GetViewPos(TexCoord);
 
-	vec3 random = texture(texture2, Position.xy * NoiseScale).rgb;
+	vec3 random = texture(texture1, TexCoord.xy * NoiseScale).rgb;
+	//vec3 random = vec3(1,0,0);
 
 	vec3 Pr, Pl, Pt, Pb;
-    Pr = GetViewPosFront(TexCoord + vec2(InvAORes.x, 0));
-    Pl = GetViewPosFront(TexCoord + vec2(-InvAORes.x, 0));
-    Pt = GetViewPosFront(TexCoord + vec2(0, InvAORes.y));
-    Pb = GetViewPosFront(TexCoord + vec2(0, -InvAORes.y));
+    Pr = GetViewPos(TexCoord + vec2(InvAORes.x, 0));
+    Pl = GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
+    Pt = GetViewPos(TexCoord + vec2(0, InvAORes.y));
+    Pb = GetViewPos(TexCoord + vec2(0, -InvAORes.y));
 
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
-    //dPdu = normalize(dPdu);
-    //dPdv = normalize(dPdv);
 
     vec2 rayRadiusUV = 0.5 * R * FocalLen / -P.z;
     float rayRadiusPix = rayRadiusUV.x * AORes.x;

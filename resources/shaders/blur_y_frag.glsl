@@ -1,83 +1,101 @@
 #version 150
 
 uniform sampler2D texture0;
-uniform sampler2D texture1;
 
-uniform vec2 AORes = vec2(1024.0/2, 768.0/2);
-uniform vec2 InvAORes = 1.0 / vec2(1024.0, 768.0);
 uniform vec2 FullRes = vec2(1024.0, 768.0);
 uniform vec2 InvFullRes = 1.0 / vec2(1024.0, 768.0);
 
 uniform vec2 LinMAD;
 
-uniform float Threshold = 0.1;
-uniform float DepthFalloff = 1.0;
+#define KERNEL_RADIUS 8.0
 
-uniform float sigma = 30.0;
-
-out float out_frag0;
+out vec2 out_frag0;
 
 in vec2 TexCoord;
 
-float ViewSpaceZFromDepth(float d)
-{
-	// [0,1] -> [-1,1] clip space
-	d = d * 2.0 - 1.0;
-	// Linearize the depth value
-	return -1.0 / (LinMAD.x * d + LinMAD.y);
-}
-
 vec2 SampleAOZ(vec2 uv)
 {
-    return vec2(texture(texture0, TexCoord + uv*InvFullRes).r,
-    			ViewSpaceZFromDepth(texture(texture1, TexCoord + uv*InvFullRes).r));
+    return texture(texture0, TexCoord + uv * InvFullRes).rg;
 }
 
 vec2 PointSampleAOZ(vec2 uv)
 {
-	ivec2 coord = ivec2(round(TexCoord * FullRes + uv*InvFullRes));
-
-	return vec2(texelFetch(texture0, coord, 0).r,
-    			ViewSpaceZFromDepth(texelFetch(texture1, coord, 0).r));
+	ivec2 coord = ivec2(round(gl_FragCoord.xy + uv));
+	return texelFetch(texture0, coord, 0).rg;
 }
 
-float GaussianWeight(vec2 coord)
+float CrossBilateralWeight(float r, float z, float z0)
 {
-	const float PI = 3.14159265;
-	const float A = 1.0 / (2.0 * PI * sigma * sigma);
-	const float B = - 1.0 / (2.0 * sigma * sigma);
+	const float BlurSigma = (KERNEL_RADIUS+1.0f) * 0.5f;
+	const float BlurFalloff = 1.0f / (2.0f*BlurSigma*BlurSigma);
 
-	return A * exp(dot(coord,coord) * B);
-}
-
-float ZWeight(float center, float z)
-{
-	const float epsilon = 0.11;
-	//return 1.0 / (epsilon + abs(center - z) * DepthFalloff);
-	return float(abs(center - z) < Threshold);
+	float dz = z0 - z;
+	return exp2(-r*r*BlurFalloff - dz*dz);
 }
 
 void main(void)
 {
 	vec2 aoz = PointSampleAOZ(vec2(0));
-	float center_depth = aoz.y;
+	float center_z = aoz.y;
 
-	float w = GaussianWeight(vec2(0));
+	float w = 1.0;
 	float total_ao = aoz.x * w;
 	float total_weight = w;
+	float i = 1.0;
 
-	for(float i = 0.5; i < sigma / 6.0; ++i)
+	for(; i <= KERNEL_RADIUS/2; i += 1.0)
 	{
-		aoz = SampleAOZ( vec2(0,i) );
-		w = GaussianWeight( vec2(0,i) ) * ZWeight(center_depth, aoz.y);
+		aoz = PointSampleAOZ( vec2(0,i) );
+		w = CrossBilateralWeight(i, aoz.y, center_z);
 		total_ao += aoz.x * w;
 		total_weight += w;
 
-		aoz = SampleAOZ( vec2(0,-i) );
-		w = GaussianWeight( vec2(0,-i) ) * ZWeight(center_depth, aoz.y);
+		aoz = PointSampleAOZ( vec2(0,-i) );
+		w = CrossBilateralWeight(i, aoz.y, center_z);
 		total_ao += aoz.x * w;
 		total_weight += w;
 	}
 
-	out_frag0 = total_ao / total_weight;
+	for(; i <= KERNEL_RADIUS; i += 2.0)
+	{
+		aoz = SampleAOZ( vec2(0,0.5+i) );
+		w = CrossBilateralWeight(i, aoz.y, center_z);
+		total_ao += aoz.x * w;
+		total_weight += w;
+
+		aoz = SampleAOZ( vec2(0,-0.5-i) );
+		w = CrossBilateralWeight(i, aoz.y, center_z);
+		total_ao += aoz.x * w;
+		total_weight += w;
+	}
+
+	// i = 1.0;
+
+	// for(; i <= KERNEL_RADIUS/2; i += 1.0)
+	// {
+
+	// }
+
+	// for(; i <= KERNEL_RADIUS; i += 2.0)
+	// {
+
+	// }
+
+	// for(float i = 0.5; i < KERNEL_RADIUS; ++i)
+	// {
+	// 	aoz = SampleAOZ( vec2(0,i) );
+	// 	//w = GaussianWeight( vec2(0,i) ) * ZWeight(center_z, aoz.y);
+	// 	w = CrossBilateralWeight(i, aoz.y, center_z);
+	// 	total_ao += aoz.x * w;
+	// 	total_weight += w;
+
+	// 	aoz = SampleAOZ( vec2(0,-i) );
+	// 	//w = GaussianWeight( vec2(0,-i) ) * ZWeight(center_z, aoz.y);
+	// 	w = CrossBilateralWeight(i, aoz.y, center_z);
+	// 	total_ao += aoz.x * w;
+	// 	total_weight += w;
+	// }
+
+	float ao = total_ao / total_weight;
+	out_frag0 = vec2(ao, center_z);
 }
