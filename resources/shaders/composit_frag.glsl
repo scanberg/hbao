@@ -13,7 +13,7 @@ void main(void)
 {
 	vec4 color = 1.0 * texture(texture0, TexCoord);
 	float ao = texture(texture1, TexCoord).r;
-	ao = pow(ao, 1.3);
+	//ao = pow(ao, 1.3);
 	//vec3 normal = vec3(texture(texture2, TexCoord).rg, 0.0);
 	//vec3 viewSpacePos = texture(texture3, TexCoord).rgb;
 	//normal.z = 1.0 - sqrt(dot(normal.xy, normal.xy));

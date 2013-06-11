@@ -50,6 +50,13 @@ vec3 GetViewPos(vec2 uv)
 	return UVToViewSpace(uv, z);
 }
 
+vec3 GetViewPosPoint(ivec2 uv)
+{
+	ivec2 coord = ivec2(gl_FragCoord.xy) + uv;
+	float z = texelFetch(texture0, coord, 0).r;
+	return UVToViewSpace(uv, z);
+}
+
 float TanToSin(float x)
 {
 	return x * inversesqrt(x*x + 1.0);
@@ -116,14 +123,14 @@ float HorizonOcclusion(	vec2 deltaUV,
 
 	float tanS;
 	float d2;
-	vec3 FS, BS;
+	vec3 S;
 
 	for(int s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
-		FS = GetViewPos(uv);
-		tanS = Tangent(P, FS);
-		d2 = Length2(FS - P);
+		S = GetViewPos(uv);
+		tanS = Tangent(P, S);
+		d2 = Length2(S - P);
 
 		if(d2 < R2 && tanS > tanH)
 		{
@@ -133,19 +140,6 @@ float HorizonOcclusion(	vec2 deltaUV,
 			tanH = tanS;
 			sinH = sinS;
 		}
-
-		// BS = GetViewPosBack(uv);
-		// tanS = Tangent(P, BS);
-		// d2 = Length2(BS - P);
-
-		// if(d2 < R2 && tanS > tanH)
-		// {
-		//	float sinS = TanToSin(tanS);
-		//	ao += Falloff(d2) * (sinS - sinH);
-
-		//	tanH = tanS;
-		//	sinH = sinS;
-		// }
 	}
 	
 	return ao;
@@ -163,19 +157,18 @@ void main(void)
 	int numSamples = NumSamples;
 	const float strength = 1.9;
 
-	vec3 P = GetViewPos(TexCoord);
-
-	vec3 random = texture(texture1, TexCoord.xy * NoiseScale).rgb;
-	//vec3 random = vec3(1,0,0);
-
-	vec3 Pr, Pl, Pt, Pb;
-    Pr = GetViewPos(TexCoord + vec2(InvAORes.x, 0));
-    Pl = GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
-    Pt = GetViewPos(TexCoord + vec2(0, InvAORes.y));
-    Pb = GetViewPos(TexCoord + vec2(0, -InvAORes.y));
+	vec3 P, Pr, Pl, Pt, Pb;
+	P 	= GetViewPos(TexCoord);
+    Pr 	= GetViewPos(TexCoord + vec2( InvAORes.x, 0));
+    Pl 	= GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
+    Pt 	= GetViewPos(TexCoord + vec2( 0, InvAORes.y));
+    Pb 	= GetViewPos(TexCoord + vec2( 0,-InvAORes.y));
 
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
+
+	vec3 random = texture(texture1, TexCoord.xy * NoiseScale).rgb;
+	//vec3 random = vec3(1,0,0);
 
     vec2 rayRadiusUV = 0.5 * R * FocalLen / -P.z;
     float rayRadiusPix = rayRadiusUV.x * AORes.x;
@@ -203,6 +196,7 @@ void main(void)
 		}
 
 		ao = 1.0 - ao / numDirections * strength;
+		//ao = 0.0;
 	}
 
 	//float frontZ = P.z;

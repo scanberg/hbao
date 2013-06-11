@@ -11,18 +11,18 @@
 #include "MeshToGeometryAdapter.h"
 #include "MaterialToSurfaceAdapter.h"
 
-#define WIDTH 800
-#define HEIGHT 600
+#define WIDTH 1280
+#define HEIGHT 720
 
-#define RES_RATIO 1
+#define RES_RATIO 2
 #define AO_WIDTH (WIDTH/RES_RATIO)
 #define AO_HEIGHT (HEIGHT/RES_RATIO)
-#define AO_RADIUS 0.3
-#define AO_DIRS 12
-#define AO_SAMPLES 36
+#define AO_RADIUS 0.5
+#define AO_DIRS 6
+#define AO_SAMPLES 3
 #define AO_STRENGTH 2.5;
 
-//#define BLUR 1;
+//#define BLUR 0;
 
 #define NOISE_RES 4
 
@@ -135,7 +135,7 @@ int main()
 
     fboHalfRes->bind();
 
-    buffer[0] = GL_COLOR_ATTACHMENT1;
+    buffer[0] = GL_COLOR_ATTACHMENT2;
     glDrawBuffers(1, buffer);
 
     hbaoShader->bind();
@@ -151,7 +151,7 @@ int main()
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX1));
+    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX2));
 
     fboFullRes->bind();
 
@@ -324,7 +324,8 @@ void init()
   fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
   //fboHalfRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboHalfRes->attachBuffer(FBO_AUX0, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
-  fboHalfRes->attachBuffer(FBO_AUX1, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  fboHalfRes->attachBuffer(FBO_AUX1, GL_RG16F, GL_RG, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  fboHalfRes->attachBuffer(FBO_AUX2, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
 
   float fovRad = cam->getFov() * 3.14159265f / 180.0f;
