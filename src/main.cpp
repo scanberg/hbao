@@ -19,8 +19,9 @@
 #define AO_HEIGHT (HEIGHT/RES_RATIO)
 #define AO_RADIUS 0.3
 #define AO_DIRS 6
-#define AO_SAMPLES 3
+#define AO_SAMPLES 5
 #define AO_STRENGTH 2.5;
+#define AO_MAX_RADIUS_PIXELS 50.0
 
 #define NOISE_RES 4
 
@@ -49,7 +50,7 @@ Camera * cam;
 Shader * geometryShader;
 Shader * geometryBackShader;
 Shader * compositShader;
-Shader * hbaoShader;
+Shader * hbaoHalfShader;
 Shader * hbaoFullShader;
 //Shader * ssaoShader;
 Shader * blurXShader;
@@ -61,6 +62,7 @@ Framebuffer2D * fboFullRes;
 Framebuffer2D * fboHalfRes;
 
 double timeStamps[7];
+unsigned int queryID[7];
 
 Surface * surface0;
 
@@ -82,7 +84,9 @@ int main()
 	{
     calcFPS(dt);
 
-    timeStamps[0] = glfwGetTime();
+    //timeStamps[0] = glfwGetTime();
+    glGenQueries(7, queryID);
+    glQueryCounter(queryID[0], GL_TIMESTAMP);
 
 		modifyCamera(dt);
     cam->setup();
@@ -100,20 +104,21 @@ int main()
     glUniformMatrix4fv(geometryShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
     glUniformMatrix4fv(geometryShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
 
-    mdl->draw();
+    //mdl->draw();
+    model->draw();
 
-    timeStamps[1] = glfwGetTime();
+    //timeStamps[1] = glfwGetTime();
+    glQueryCounter(queryID[1], GL_TIMESTAMP);
 
     glDisable(GL_DEPTH_TEST);
 
     //glColorMask(1, 0, 0, 0);
     //glDepthFunc(GL_ALWAYS);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
-
     if(!fullres)
     {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
       // Downsample depth
       fboHalfRes->bind();
@@ -126,7 +131,8 @@ int main()
 
     }
 
-    timeStamps[2] = glfwGetTime();
+    //timeStamps[2] = glfwGetTime();
+    glQueryCounter(queryID[2], GL_TIMESTAMP);
 
     // AO pass
 
@@ -141,13 +147,16 @@ int main()
       buffer[0] = GL_COLOR_ATTACHMENT1;
       glDrawBuffers(1, buffer);
 
-      hbaoShader->bind();
+      hbaoHalfShader->bind();
       //ssaoShader->bind();
 
       fsquad->draw();
     }
     else
     {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
+
       buffer[0] = GL_COLOR_ATTACHMENT1;
       glDrawBuffers(1, buffer);
 
@@ -155,7 +164,8 @@ int main()
       fsquad->draw();
     }
 
-    timeStamps[3] = glfwGetTime();
+    //timeStamps[3] = glfwGetTime();
+    glQueryCounter(queryID[3], GL_TIMESTAMP);
 
     // Upsample
 
@@ -177,7 +187,8 @@ int main()
       fsquad->draw();
     }
 
-    timeStamps[4] = glfwGetTime();
+    //timeStamps[4] = glfwGetTime();
+    glQueryCounter(queryID[4], GL_TIMESTAMP);
 
     if(blur)
     {
@@ -207,7 +218,8 @@ int main()
 
     }
 
-    timeStamps[5] = glfwGetTime();
+    //timeStamps[5] = glfwGetTime();
+    glQueryCounter(queryID[5], GL_TIMESTAMP);
 
     fboFullRes->unbind();
 
@@ -226,13 +238,28 @@ int main()
     compositShader->bind();
 
     fsquad->draw();
-
-    timeStamps[6] = glfwGetTime();
 		
 		glfwSwapBuffers();
 
 		if(!glfwGetWindowParam(GLFW_OPENED))
 			running = false;
+
+    //timeStamps[6] = glfwGetTime();
+    glQueryCounter(queryID[6], GL_TIMESTAMP);
+
+    // wait until the results are available
+    GLint stopTimerAvailable = 0;
+    bool stop = false;
+
+    while (!stop) {
+      stop = true;
+      for(int i=0; i<7; ++i)
+      {
+        glGetQueryObjectiv(queryID[1], GL_QUERY_RESULT_AVAILABLE, &stopTimerAvailable);
+        if(!stopTimerAvailable)
+          stop = false;
+      }
+    }
 	}
 
 	cleanUp();
@@ -270,11 +297,11 @@ void init()
 
   // mdl->addGeometryAndSurface(&floor, surface);
 
-  //model = new Geometry();
+  model = new Geometry();
 
-  //mesh = loadMeshFromObj("resources/meshes/sponza.obj", 0.01f);
-  //*model = createGeometryFromMesh(mesh);
-  //model->createStaticBuffers();
+  mesh = loadMeshFromObj("resources/meshes/sponza.obj", 0.01f);
+  *model = createGeometryFromMesh(mesh);
+  model->createStaticBuffers();
 
   std::vector<Mesh> meshes = loadMeshesFromObj("resources/meshes/sponza.obj", 0.01f);
   std::vector<Geometry> geometries = createGeometryFromMesh(meshes);
@@ -307,14 +334,11 @@ void init()
   geometryBackShader = new Shader("resources/shaders/geometry_vert.glsl",
               "resources/shaders/geometry_back_frag.glsl");
 
-  hbaoShader = new Shader("resources/shaders/fullscreen_vert.glsl",
+  hbaoHalfShader = new Shader("resources/shaders/fullscreen_vert.glsl",
               "resources/shaders/hbao_frag.glsl");
 
   hbaoFullShader = new Shader("resources/shaders/fullscreen_vert.glsl",
               "resources/shaders/hbao_full_frag.glsl");
-
-  // ssaoShader = new Shader("resources/shaders/fullscreen_vert.glsl",
-  //             "resources/shaders/ssao_frag.glsl");
 
 	compositShader = new Shader("resources/shaders/fullscreen_vert.glsl",
 								"resources/shaders/composit_frag.glsl");
@@ -364,34 +388,36 @@ void init()
   LinMAD[0] = (near-far)/(2.0f*near*far);
   LinMAD[1] = (near+far)/(2.0f*near*far);
 
-  hbaoShader->bind();
+  hbaoHalfShader->bind();
   int pos;
-  pos = hbaoShader->getUniformLocation("FocalLen");
+  pos = hbaoHalfShader->getUniformLocation("FocalLen");
   glUniform2f(pos, FocalLen[0], FocalLen[1]);
-  pos = hbaoShader->getUniformLocation("UVToViewA");
+  pos = hbaoHalfShader->getUniformLocation("UVToViewA");
   glUniform2f(pos, UVToViewA[0], UVToViewA[1]);
-  pos = hbaoShader->getUniformLocation("UVToViewB");
+  pos = hbaoHalfShader->getUniformLocation("UVToViewB");
   glUniform2f(pos, UVToViewB[0], UVToViewB[1]);
-  pos = hbaoShader->getUniformLocation("LinMAD");
+  pos = hbaoHalfShader->getUniformLocation("LinMAD");
   glUniform2f(pos, LinMAD[0], LinMAD[1]);
 
-  pos = hbaoShader->getUniformLocation("AORes");
+  pos = hbaoHalfShader->getUniformLocation("AORes");
   glUniform2f(pos, (float)AO_WIDTH, (float)AO_HEIGHT);
-  pos = hbaoShader->getUniformLocation("InvAORes");
+  pos = hbaoHalfShader->getUniformLocation("InvAORes");
   glUniform2f(pos, 1.0f/(float)AO_WIDTH, 1.0f/(float)AO_HEIGHT);
 
-  pos = hbaoShader->getUniformLocation("R");
+  pos = hbaoHalfShader->getUniformLocation("R");
   glUniform1f(pos, AO_RADIUS);
-  pos = hbaoShader->getUniformLocation("R2");
+  pos = hbaoHalfShader->getUniformLocation("R2");
   glUniform1f(pos, AO_RADIUS*AO_RADIUS);
-  pos = hbaoShader->getUniformLocation("NegInvR2");
+  pos = hbaoHalfShader->getUniformLocation("NegInvR2");
   glUniform1f(pos, -1.0f / (AO_RADIUS*AO_RADIUS));
+  pos = hbaoHalfShader->getUniformLocation("MaxRadiusPixels");
+  glUniform1f(pos, AO_MAX_RADIUS_PIXELS / (float)RES_RATIO);
 
-  pos = hbaoShader->getUniformLocation("NoiseScale");
+  pos = hbaoHalfShader->getUniformLocation("NoiseScale");
   glUniform2f(pos, (float)AO_WIDTH/(float)NOISE_RES, (float)AO_HEIGHT/(float)NOISE_RES);
-  pos = hbaoShader->getUniformLocation("NumDirections");
+  pos = hbaoHalfShader->getUniformLocation("NumDirections");
   glUniform1i(pos, AO_DIRS);
-  pos = hbaoShader->getUniformLocation("NumSamples");
+  pos = hbaoHalfShader->getUniformLocation("NumSamples");
   glUniform1i(pos, AO_SAMPLES);
 
   hbaoFullShader->bind();
@@ -415,9 +441,11 @@ void init()
   glUniform1f(pos, AO_RADIUS*AO_RADIUS);
   pos = hbaoFullShader->getUniformLocation("NegInvR2");
   glUniform1f(pos, -1.0f / (AO_RADIUS*AO_RADIUS));
+  pos = hbaoFullShader->getUniformLocation("MaxRadiusPixels");
+  glUniform1f(pos, AO_MAX_RADIUS_PIXELS);
 
   pos = hbaoFullShader->getUniformLocation("NoiseScale");
-  glUniform2f(pos, (float)AO_WIDTH/(float)NOISE_RES, (float)AO_HEIGHT/(float)NOISE_RES);
+  glUniform2f(pos, (float)WIDTH/(float)NOISE_RES, (float)HEIGHT/(float)NOISE_RES);
   pos = hbaoFullShader->getUniformLocation("NumDirections");
   glUniform1i(pos, AO_DIRS);
   pos = hbaoFullShader->getUniformLocation("NumSamples");
@@ -473,7 +501,7 @@ void cleanUp()
 	delete cam;
 
 	delete geometryShader;
-	delete hbaoShader;
+	delete hbaoHalfShader;
   delete hbaoFullShader;
   delete compositShader;
   delete blurXShader;
@@ -569,16 +597,21 @@ void calcFPS(float &dt)
     if(t1 > 0.25)
     {
       float fps = (float)frames / t1;
-      double geom = timeStamps[1] - timeStamps[0];
-      double down = timeStamps[2] - timeStamps[1];
-      double ao   = timeStamps[3] - timeStamps[2];
-      double up   = timeStamps[4] - timeStamps[3];
-      double blur = timeStamps[5] - timeStamps[4];
-      double comp = timeStamps[6] - timeStamps[5];
-      double tot  = timeStamps[6] - timeStamps[0];
 
+      GLuint64 timeStamp[7];
 
-      sprintf(title, "Fullres: %i, FPS: %2.1f, time: geom %1.5f, down %1.5f, ao %1.5f, up %1.5f, blur %1.5f, comp %1.5f tot %1.5f",
+      for(int i=0; i<7; ++i)
+        glGetQueryObjectui64v(queryID[i], GL_QUERY_RESULT, &timeStamp[i]);
+
+      double geom = (timeStamp[1] - timeStamp[0]) / 1000000.0;
+      double down = (timeStamp[2] - timeStamp[1]) / 1000000.0;
+      double ao   = (timeStamp[3] - timeStamp[2]) / 1000000.0;
+      double up   = (timeStamp[4] - timeStamp[3]) / 1000000.0;
+      double blur = (timeStamp[5] - timeStamp[4]) / 1000000.0;
+      double comp = (timeStamp[6] - timeStamp[5]) / 1000000.0;
+      double tot  = (timeStamp[6] - timeStamp[0]) / 1000000.0;
+
+      sprintf(title, "Fullres: %i, FPS: %2.1f, time(ms): geom %2.2f, down %2.2f, ao %2.2f, up %2.2f, blur %2.2f, comp %2.2f tot %2.2f",
         (int)fullres,
         fps,
         geom,
@@ -631,23 +664,25 @@ void modifyCamera(float dt)
 
 void generateNoiseTexture(int width, int height)
 {
-  float *noise = new float[width*height*3];
+  float *noise = new float[width*height*4];
   for(int y = 0; y < height; ++y)
   {
     for(int x = 0; x < width; ++x)
     {
       vec2 xy = glm::circularRand(1.0f);
       float z = glm::linearRand(0.0f, 1.0f);
+      float w = glm::linearRand(0.0f, 1.0f);
 
-      int offset = 3*(y*width + x);
+      int offset = 4*(y*width + x);
       noise[offset + 0] = xy[0];
       noise[offset + 1] = xy[1];
       noise[offset + 2] = z;
+      noise[offset + 3] = w;
     }
   }
 
-  GLint internalFormat = GL_RGB32F;
-  GLint format = GL_RGB;
+  GLint internalFormat = GL_RGBA16F;
+  GLint format = GL_RGBA;
   GLint type = GL_FLOAT;
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);

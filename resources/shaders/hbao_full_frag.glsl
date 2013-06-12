@@ -19,7 +19,7 @@ uniform float R = 0.3;
 uniform float R2 = 0.3*0.3;
 uniform float NegInvR2 = - 1.0 / (0.3*0.3);
 uniform float TanBias = tan(30.0 * PI / 180.0);
-uniform float MaxRadiusPixels = 50.0;
+uniform float MaxRadiusPixels = 100.0;
 
 uniform int NumDirections = 6;
 uniform int NumSamples = 4;
@@ -112,8 +112,6 @@ float HorizonOcclusion(	vec2 deltaUV,
 						float randstep,
 						float numSamples)
 {
-	float ao = 0;
-
 	vec2 uv = TexCoord + SnapUVOffset(randstep*deltaUV);
 	deltaUV = SnapUVOffset( deltaUV );
 
@@ -126,13 +124,15 @@ float HorizonOcclusion(	vec2 deltaUV,
 	float d2;
 	vec3 S;
 
+	float ao = 0.0;
+	float h0 = 0.0;
 	for(float s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
 		S = GetViewPos(uv);
-		tanS = Tangent(P, S);
-		d2 = Length2(S - P);
 
+		d2 = Length2(S - P);
+		tanS = Tangent(P, S);
 		if(d2 < R2 && tanS > tanH)
 		{
 			float sinS = TanToSin(tanS);
@@ -190,7 +190,7 @@ void main(void)
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
 
-	vec3 random = texture(texture1, TexCoord.xy * NoiseScale).rgb;
+	vec4 random = texture(texture1, TexCoord.xy * NoiseScale);
 	//vec3 random = vec3(1,0,0);
 
     vec2 rayRadiusUV = 0.5 * R * FocalLen / -P.z;
@@ -219,7 +219,7 @@ void main(void)
 									P,
 									dPdu,
 									dPdv,
-									random.z,
+									random.w,
 									numSteps);
 		}
 
