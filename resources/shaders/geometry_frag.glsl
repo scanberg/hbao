@@ -16,7 +16,7 @@ void main(void)
 	if( diffuseAndMask.a < 0.5)
 		discard;
 
-	diffuseAndMask.rgb = vec3(1,0,0);
+	diffuseAndMask.rgb = vec3(1,1,1);
 
 	out_frag0 = vec4(diffuseAndMask.rgb, 1.0);
 }

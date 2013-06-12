@@ -18,9 +18,9 @@ void main(void)
 	//vec3 viewSpacePos = texture(texture3, TexCoord).rgb;
 	//normal.z = 1.0 - sqrt(dot(normal.xy, normal.xy));
 
-	//out_frag0 = vec4(color.rgb * ao, color.a);
+	out_frag0 = vec4(color.rgb * ao, color.a);
 	//out_frag0 = vec4(color.rgb, 1.0);
 	//out_frag0 = vec4(abs(ao - viewSpacePos)*10, 1.0);
-	out_frag0 = vec4( vec3(ao), 1.0);
+	//out_frag0 = vec4( vec3(ao), 1.0);
 	//out_frag0 = vec4(viewSpacePos, 1.0);
 }

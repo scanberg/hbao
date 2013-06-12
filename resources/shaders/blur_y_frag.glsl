@@ -35,7 +35,7 @@ float CrossBilateralWeight(float r, float z, float z0)
 
 void main(void)
 {
-	vec2 aoz = PointSampleAOZ(vec2(0));
+	vec2 aoz = SampleAOZ(vec2(0));
 	float center_z = aoz.y;
 
 	float w = 1.0;
@@ -45,12 +45,12 @@ void main(void)
 
 	for(; i <= KERNEL_RADIUS/2; i += 1.0)
 	{
-		aoz = PointSampleAOZ( vec2(0,i) );
+		aoz = SampleAOZ( vec2(0,i) );
 		w = CrossBilateralWeight(i, aoz.y, center_z);
 		total_ao += aoz.x * w;
 		total_weight += w;
 
-		aoz = PointSampleAOZ( vec2(0,-i) );
+		aoz = SampleAOZ( vec2(0,-i) );
 		w = CrossBilateralWeight(i, aoz.y, center_z);
 		total_ao += aoz.x * w;
 		total_weight += w;

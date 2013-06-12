@@ -17,12 +17,10 @@
 #define RES_RATIO 2
 #define AO_WIDTH (WIDTH/RES_RATIO)
 #define AO_HEIGHT (HEIGHT/RES_RATIO)
-#define AO_RADIUS 0.5
+#define AO_RADIUS 0.3
 #define AO_DIRS 6
 #define AO_SAMPLES 3
 #define AO_STRENGTH 2.5;
-
-//#define BLUR 0;
 
 #define NOISE_RES 4
 
@@ -40,6 +38,9 @@ void modifyCamera(float dt);
 void generateNoiseTexture(int width, int height);
 
 bool running = true;
+bool blur = false;
+bool fullres = true;
+
 Model * mdl;
 Geometry * model;
 Geometry * fsquad;
@@ -49,6 +50,7 @@ Shader * geometryShader;
 Shader * geometryBackShader;
 Shader * compositShader;
 Shader * hbaoShader;
+Shader * hbaoFullShader;
 //Shader * ssaoShader;
 Shader * blurXShader;
 Shader * blurYShader;
@@ -87,9 +89,6 @@ int main()
 
     // RENDER GEOMETRY PASS
     glEnable(GL_DEPTH_TEST);
-    glCullFace(GL_BACK);
-    glDepthFunc(GL_LESS);
-    //glDepthMask(1);
 
     fboFullRes->bind();
     glClearColor(0.2, 0.3, 0.5, 1.0);
@@ -108,88 +107,105 @@ int main()
     glDisable(GL_DEPTH_TEST);
 
     //glColorMask(1, 0, 0, 0);
-    glDepthFunc(GL_ALWAYS);
+    //glDepthFunc(GL_ALWAYS);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
-    // Downsample depth
-    fboHalfRes->bind();
+    if(!fullres)
+    {
 
-    buffer[0] = GL_COLOR_ATTACHMENT0;
-    glDrawBuffers(1, buffer);
+      // Downsample depth
+      fboHalfRes->bind();
 
-    downsampleShader->bind();
+      buffer[0] = GL_COLOR_ATTACHMENT0;
+      glDrawBuffers(1, buffer);
 
-    fsquad->draw();
+      downsampleShader->bind();
+      fsquad->draw();
+
+    }
 
     timeStamps[2] = glfwGetTime();
 
     // AO pass
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX0));
-
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, noiseTexture);
 
-    fboHalfRes->bind();
+    if(!fullres)
+    {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX0));
 
-    buffer[0] = GL_COLOR_ATTACHMENT2;
-    glDrawBuffers(1, buffer);
+      buffer[0] = GL_COLOR_ATTACHMENT1;
+      glDrawBuffers(1, buffer);
 
-    hbaoShader->bind();
-    //ssaoShader->bind();
+      hbaoShader->bind();
+      //ssaoShader->bind();
 
-    fsquad->draw();
+      fsquad->draw();
+    }
+    else
+    {
+      buffer[0] = GL_COLOR_ATTACHMENT1;
+      glDrawBuffers(1, buffer);
+
+      hbaoFullShader->bind();
+      fsquad->draw();
+    }
 
     timeStamps[3] = glfwGetTime();
 
     // Upsample
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
+    if(!fullres)
+    {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_DEPTH));
 
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX2));
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, fboHalfRes->getBufferHandle(FBO_AUX1));
 
-    fboFullRes->bind();
+      fboFullRes->bind();
 
-    buffer[0] = GL_COLOR_ATTACHMENT1;
-    glDrawBuffers(1, buffer);
+      buffer[0] = GL_COLOR_ATTACHMENT1;
+      glDrawBuffers(1, buffer);
 
-    upsampleShader->bind();
+      upsampleShader->bind();
 
-    fsquad->draw();
+      fsquad->draw();
+    }
 
     timeStamps[4] = glfwGetTime();
 
-#ifdef BLUR
-    // BLUR 
+    if(blur)
+    {
+      // BLUR 
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX1));
 
-    // X
-    buffer[0] = GL_COLOR_ATTACHMENT2;
-    glDrawBuffers(1, buffer);
+      // X
+      buffer[0] = GL_COLOR_ATTACHMENT2;
+      glDrawBuffers(1, buffer);
 
-    blurXShader->bind();
+      blurXShader->bind();
 
-    fsquad->draw();
+      fsquad->draw();
 
-    // Y
-    buffer[0] = GL_COLOR_ATTACHMENT1;
-    glDrawBuffers(1, buffer);
+      // Y
+      buffer[0] = GL_COLOR_ATTACHMENT1;
+      glDrawBuffers(1, buffer);
 
-    blurYShader->bind();
+      blurYShader->bind();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, fboFullRes->getBufferHandle(FBO_AUX2));
 
-    fsquad->draw();
+      fsquad->draw();
 
-#endif
+    }
 
     timeStamps[5] = glfwGetTime();
 
@@ -294,6 +310,9 @@ void init()
   hbaoShader = new Shader("resources/shaders/fullscreen_vert.glsl",
               "resources/shaders/hbao_frag.glsl");
 
+  hbaoFullShader = new Shader("resources/shaders/fullscreen_vert.glsl",
+              "resources/shaders/hbao_full_frag.glsl");
+
   // ssaoShader = new Shader("resources/shaders/fullscreen_vert.glsl",
   //             "resources/shaders/ssao_frag.glsl");
 
@@ -324,8 +343,7 @@ void init()
   fboHalfRes = new Framebuffer2D(AO_WIDTH, AO_HEIGHT);
   //fboHalfRes->attachBuffer(FBO_DEPTH, GL_DEPTH_COMPONENT32, GL_DEPTH_COMPONENT, GL_FLOAT);
   fboHalfRes->attachBuffer(FBO_AUX0, GL_R32F, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
-  fboHalfRes->attachBuffer(FBO_AUX1, GL_RG16F, GL_RG, GL_FLOAT, GL_LINEAR, GL_LINEAR);
-  fboHalfRes->attachBuffer(FBO_AUX2, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
+  fboHalfRes->attachBuffer(FBO_AUX1, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
 
   float fovRad = cam->getFov() * 3.14159265f / 180.0f;
@@ -374,6 +392,35 @@ void init()
   pos = hbaoShader->getUniformLocation("NumDirections");
   glUniform1i(pos, AO_DIRS);
   pos = hbaoShader->getUniformLocation("NumSamples");
+  glUniform1i(pos, AO_SAMPLES);
+
+  hbaoFullShader->bind();
+  pos = hbaoFullShader->getUniformLocation("FocalLen");
+  glUniform2f(pos, FocalLen[0], FocalLen[1]);
+  pos = hbaoFullShader->getUniformLocation("UVToViewA");
+  glUniform2f(pos, UVToViewA[0], UVToViewA[1]);
+  pos = hbaoFullShader->getUniformLocation("UVToViewB");
+  glUniform2f(pos, UVToViewB[0], UVToViewB[1]);
+  pos = hbaoFullShader->getUniformLocation("LinMAD");
+  glUniform2f(pos, LinMAD[0], LinMAD[1]);
+
+  pos = hbaoFullShader->getUniformLocation("AORes");
+  glUniform2f(pos, (float)WIDTH, (float)HEIGHT);
+  pos = hbaoFullShader->getUniformLocation("InvAORes");
+  glUniform2f(pos, 1.0f/(float)WIDTH, 1.0f/(float)HEIGHT);
+
+  pos = hbaoFullShader->getUniformLocation("R");
+  glUniform1f(pos, AO_RADIUS);
+  pos = hbaoFullShader->getUniformLocation("R2");
+  glUniform1f(pos, AO_RADIUS*AO_RADIUS);
+  pos = hbaoFullShader->getUniformLocation("NegInvR2");
+  glUniform1f(pos, -1.0f / (AO_RADIUS*AO_RADIUS));
+
+  pos = hbaoFullShader->getUniformLocation("NoiseScale");
+  glUniform2f(pos, (float)AO_WIDTH/(float)NOISE_RES, (float)AO_HEIGHT/(float)NOISE_RES);
+  pos = hbaoFullShader->getUniformLocation("NumDirections");
+  glUniform1i(pos, AO_DIRS);
+  pos = hbaoFullShader->getUniformLocation("NumSamples");
   glUniform1i(pos, AO_SAMPLES);
 
   blurXShader->bind();
@@ -427,6 +474,7 @@ void cleanUp()
 
 	delete geometryShader;
 	delete hbaoShader;
+  delete hbaoFullShader;
   delete compositShader;
   delete blurXShader;
   delete blurYShader;
@@ -496,12 +544,12 @@ bool setupGL()
 
 void GLFWCALL keyCallback(int key, int action)
 {
-  switch(key)
-  {
-    case GLFW_KEY_ESC:
-    	running = false;
-    	break;
-  }
+  if(key == GLFW_KEY_ESC)
+    running = false;
+  else if(key == 'B' && action == GLFW_PRESS)
+    blur = !blur;
+  else if(key == 'F' && action == GLFW_PRESS)
+    fullres = !fullres;
 }
 
 void calcFPS(float &dt)
@@ -530,7 +578,8 @@ void calcFPS(float &dt)
       double tot  = timeStamps[6] - timeStamps[0];
 
 
-      sprintf(title, "FPS: %2.1f, time: geom %1.5f, down %1.5f, ao %1.5f, up %1.5f, blur %1.5f, comp %1.5f tot %1.5f",
+      sprintf(title, "Fullres: %i, FPS: %2.1f, time: geom %1.5f, down %1.5f, ao %1.5f, up %1.5f, blur %1.5f, comp %1.5f tot %1.5f",
+        (int)fullres,
         fps,
         geom,
         down,

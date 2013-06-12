@@ -19,6 +19,7 @@ uniform float R = 0.3;
 uniform float R2 = 0.3*0.3;
 uniform float NegInvR2 = - 1.0 / (0.3*0.3);
 uniform float TanBias = tan(30.0 * PI / 180.0);
+uniform float MaxRadiusPixels = 50.0;
 
 uniform int NumDirections = 6;
 uniform int NumSamples = 4;
@@ -109,7 +110,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 						vec3 dPdu,
 						vec3 dPdv,
 						float randstep,
-						int numSamples)
+						float numSamples)
 {
 	float ao = 0;
 
@@ -125,7 +126,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 	float d2;
 	vec3 S;
 
-	for(int s = 1; s <= numSamples; ++s)
+	for(float s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
 		S = GetViewPos(uv);
@@ -151,10 +152,32 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
                   Dir.x*CosSin.y + Dir.y*CosSin.x);
 }
 
+void ComputeSteps(inout vec2 step_size_uv, inout float numSteps, float ray_radius_pix, float rand)
+{
+    // Avoid oversampling if NUM_STEPS is greater than the kernel radius in pixels
+    numSteps = min(NumSamples, ray_radius_pix);
+
+    // Divide by Ns+1 so that the farthest samples are not fully attenuated
+    float step_size_pix = ray_radius_pix / (numSteps + 1);
+
+    // Clamp numSteps if it is greater than the max kernel footprint
+    float maxNumSteps = MaxRadiusPixels / step_size_pix;
+    if (maxNumSteps < numSteps)
+    {
+        // Use dithering to avoid AO discontinuities
+        numSteps = floor(maxNumSteps + rand);
+        numSteps = max(numSteps, 1);
+        step_size_pix = MaxRadiusPixels / numSteps;
+    }
+
+    // Step size in uv space
+    step_size_uv = step_size_pix * InvAORes;
+}
+
 void main(void)
 {
 	float numDirections = NumDirections;
-	int numSamples = NumSamples;
+	//int numSamples = NumSamples;
 	const float strength = 1.9;
 
 	vec3 P, Pr, Pl, Pt, Pb;
@@ -163,6 +186,11 @@ void main(void)
     Pl 	= GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
     Pt 	= GetViewPos(TexCoord + vec2( 0, InvAORes.y));
     Pb 	= GetViewPos(TexCoord + vec2( 0,-InvAORes.y));
+ 	// P 	= GetViewPosPoint(ivec2(0,0));
+  //   Pr 	= GetViewPosPoint(ivec2(1,0));
+  //   Pl 	= GetViewPosPoint(ivec2(-1,0));
+  //   Pt 	= GetViewPosPoint(ivec2(0,1));
+  //   Pb 	= GetViewPosPoint(ivec2(0,-1));
 
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
@@ -178,8 +206,13 @@ void main(void)
     if(rayRadiusPix > 1.0)
     {
     	ao = 0.0;
-    	float stepSizePix = rayRadiusPix / (numSamples + 1);
-		vec2 stepSizeUV = stepSizePix * InvAORes;
+
+    	float numSteps;
+    	vec2 stepSizeUV;
+    	ComputeSteps(stepSizeUV, numSteps, rayRadiusPix, random.z);
+
+    	//float stepSizePix = rayRadiusPix / (numSamples + 1);
+		//vec2 stepSizeUV = stepSizePix * InvAORes;
 		float alpha = 2.0 * PI / numDirections;
 
 		for(float d = 0; d < numDirections; ++d)
@@ -192,7 +225,7 @@ void main(void)
 									dPdu,
 									dPdv,
 									random.z,
-									numSamples);
+									numSteps);
 		}
 
 		ao = 1.0 - ao / numDirections * strength;
