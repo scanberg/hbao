@@ -1,3 +1,7 @@
+// This is a bilateral blur shader designed to blur the results of the HBAO
+// The weights for the cross bilateral weights is given in the slides given by dice
+// http://dice.se/publications/stable-ssao-in-battlefield-3-with-selective-temporal-filtering/
+
 #version 150
 
 uniform sampler2D texture0;
@@ -68,33 +72,6 @@ void main(void)
 		total_ao += aoz.x * w;
 		total_weight += w;
 	}
-
-	// i = 1.0;
-
-	// for(; i <= KERNEL_RADIUS/2; i += 1.0)
-	// {
-
-	// }
-
-	// for(; i <= KERNEL_RADIUS; i += 2.0)
-	// {
-
-	// }
-
-	// for(float i = 0.5; i < KERNEL_RADIUS; ++i)
-	// {
-	// 	aoz = SampleAOZ( vec2(0,i) );
-	// 	//w = GaussianWeight( vec2(0,i) ) * ZWeight(center_z, aoz.y);
-	// 	w = CrossBilateralWeight(i, aoz.y, center_z);
-	// 	total_ao += aoz.x * w;
-	// 	total_weight += w;
-
-	// 	aoz = SampleAOZ( vec2(0,-i) );
-	// 	//w = GaussianWeight( vec2(0,-i) ) * ZWeight(center_z, aoz.y);
-	// 	w = CrossBilateralWeight(i, aoz.y, center_z);
-	// 	total_ao += aoz.x * w;
-	// 	total_weight += w;
-	// }
 
 	float ao = total_ao / total_weight;
 	out_frag0 = vec2(ao, center_z);

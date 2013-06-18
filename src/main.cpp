@@ -104,8 +104,8 @@ int main()
     glUniformMatrix4fv(geometryShader->getViewMatrixLocation(), 1, false, glm::value_ptr(cam->getViewMatrix()));
     glUniformMatrix4fv(geometryShader->getProjMatrixLocation(), 1, false, glm::value_ptr(cam->getProjMatrix()));
 
-    //mdl->draw();
-    model->draw();
+    mdl->draw();
+    //model->draw();
 
     //timeStamps[1] = glfwGetTime();
     glQueryCounter(queryID[1], GL_TIMESTAMP);

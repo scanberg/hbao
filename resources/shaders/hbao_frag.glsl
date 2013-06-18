@@ -1,3 +1,6 @@
+// This is a HBAO-Shader for OpenGL, based upon nvidias directX implementation
+// supplied in their SampleSDK available from nvidia.com
+
 #version 150
 
 const float PI = 3.14159265;
@@ -15,6 +18,7 @@ uniform vec2 AORes = vec2(1024.0, 768.0);
 uniform vec2 InvAORes = vec2(1.0/1024.0, 1.0/768.0);
 uniform vec2 NoiseScale = vec2(1024.0, 768.0) / 4.0;
 
+uniform float AOStrength = 1.9;
 uniform float R = 0.3;
 uniform float R2 = 0.3*0.3;
 uniform float NegInvR2 = - 1.0 / (0.3*0.3);
@@ -114,11 +118,14 @@ float HorizonOcclusion(	vec2 deltaUV,
 {
 	float ao = 0;
 
+	// Offset the first coord with some noise
 	vec2 uv = TexCoord + SnapUVOffset(randstep*deltaUV);
 	deltaUV = SnapUVOffset( deltaUV );
 
+	// Calculate the tangent vector
 	vec3 T = deltaUV.x * dPdu + deltaUV.y * dPdv;
 
+	// Get the angle of the tangent vector from the viewspace axis
 	float tanH = BiasedTangent(T);
 	float sinH = TanToSin(tanH);
 
@@ -126,6 +133,7 @@ float HorizonOcclusion(	vec2 deltaUV,
 	float d2;
 	vec3 S;
 
+	// Sample to find the maximum angle
 	for(float s = 1; s <= numSamples; ++s)
 	{
 		uv += deltaUV;
@@ -133,9 +141,11 @@ float HorizonOcclusion(	vec2 deltaUV,
 		tanS = Tangent(P, S);
 		d2 = Length2(S - P);
 
+		// Is the sample within the radius and the angle greater?
 		if(d2 < R2 && tanS > tanH)
 		{
 			float sinS = TanToSin(tanS);
+			// Apply falloff based on the distance
 			ao += Falloff(d2) * (sinS - sinH);
 
 			tanH = tanS;
@@ -152,74 +162,76 @@ vec2 RotateDirections(vec2 Dir, vec2 CosSin)
                   Dir.x*CosSin.y + Dir.y*CosSin.x);
 }
 
-void ComputeSteps(inout vec2 step_size_uv, inout float numSteps, float ray_radius_pix, float rand)
+void ComputeSteps(inout vec2 stepSizeUv, inout float numSteps, float rayRadiusPix, float rand)
 {
-    // Avoid oversampling if NUM_STEPS is greater than the kernel radius in pixels
-    numSteps = min(NumSamples, ray_radius_pix);
+    // Avoid oversampling if numSteps is greater than the kernel radius in pixels
+    numSteps = min(NumSamples, rayRadiusPix);
 
     // Divide by Ns+1 so that the farthest samples are not fully attenuated
-    float step_size_pix = ray_radius_pix / (numSteps + 1);
+    float stepSizePix = rayRadiusPix / (numSteps + 1);
 
     // Clamp numSteps if it is greater than the max kernel footprint
-    float maxNumSteps = MaxRadiusPixels / step_size_pix;
+    float maxNumSteps = MaxRadiusPixels / stepSizePix;
     if (maxNumSteps < numSteps)
     {
         // Use dithering to avoid AO discontinuities
         numSteps = floor(maxNumSteps + rand);
         numSteps = max(numSteps, 1);
-        step_size_pix = MaxRadiusPixels / numSteps;
+        stepSizePix = MaxRadiusPixels / numSteps;
     }
 
     // Step size in uv space
-    step_size_uv = step_size_pix * InvAORes;
+    stepSizeUv = stepSizePix * InvAORes;
 }
 
 void main(void)
 {
 	float numDirections = NumDirections;
-	//int numSamples = NumSamples;
-	const float strength = 1.9;
 
 	vec3 P, Pr, Pl, Pt, Pb;
 	P 	= GetViewPos(TexCoord);
+
+	// Sample neighboring pixels
     Pr 	= GetViewPos(TexCoord + vec2( InvAORes.x, 0));
     Pl 	= GetViewPos(TexCoord + vec2(-InvAORes.x, 0));
     Pt 	= GetViewPos(TexCoord + vec2( 0, InvAORes.y));
     Pb 	= GetViewPos(TexCoord + vec2( 0,-InvAORes.y));
- 	// P 	= GetViewPosPoint(ivec2(0,0));
-  //   Pr 	= GetViewPosPoint(ivec2(1,0));
-  //   Pl 	= GetViewPosPoint(ivec2(-1,0));
-  //   Pt 	= GetViewPosPoint(ivec2(0,1));
-  //   Pb 	= GetViewPosPoint(ivec2(0,-1));
 
+    // Calculate tangent basis vectors using the minimu difference
     vec3 dPdu = MinDiff(P, Pr, Pl);
     vec3 dPdv = MinDiff(P, Pt, Pb) * (AORes.y * InvAORes.x);
 
+    // Get the random samples from the noise texture
 	vec3 random = texture(texture1, TexCoord.xy * NoiseScale).rgb;
-	//vec3 random = vec3(1,0,0);
 
+	// Calculate the projected size of the hemisphere
     vec2 rayRadiusUV = 0.5 * R * FocalLen / -P.z;
     float rayRadiusPix = rayRadiusUV.x * AORes.x;
 
     float ao = 1.0;
 
+    // Make sure the radius of the evaluated hemisphere is more than a pixel
     if(rayRadiusPix > 1.0)
     {
     	ao = 0.0;
-
     	float numSteps;
     	vec2 stepSizeUV;
+
+    	// Compute the number of steps
     	ComputeSteps(stepSizeUV, numSteps, rayRadiusPix, random.z);
 
-    	//float stepSizePix = rayRadiusPix / (numSamples + 1);
-		//vec2 stepSizeUV = stepSizePix * InvAORes;
 		float alpha = 2.0 * PI / numDirections;
 
+		// Calculate the horizon occlusion of each direction
 		for(float d = 0; d < numDirections; ++d)
 		{
 			float theta = alpha * d;
+
+			// Apply noise to the direction
 			vec2 dir = RotateDirections(vec2(cos(theta), sin(theta)), random.xy);
 			vec2 deltaUV = dir * stepSizeUV;
+
+			// Sample the pixels along the direction
 			ao += HorizonOcclusion(	deltaUV,
 									P,
 									dPdu,
@@ -228,12 +240,9 @@ void main(void)
 									numSteps);
 		}
 
-		ao = 1.0 - ao / numDirections * strength;
-		//ao = 0.0;
+		// Average the results and produce the final AO
+		ao = 1.0 - ao / numDirections * AOStrength;
 	}
-
-	//float frontZ = P.z;
-	//float backZ = texture(texture1, TexCoord).r;
 
 	out_frag0 = ao;
 }
