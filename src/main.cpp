@@ -19,7 +19,7 @@
 #define AO_HEIGHT (HEIGHT/RES_RATIO)
 #define AO_RADIUS 0.3
 #define AO_DIRS 6
-#define AO_SAMPLES 5
+#define AO_SAMPLES 3
 #define AO_STRENGTH 2.5;
 #define AO_MAX_RADIUS_PIXELS 50.0
 
