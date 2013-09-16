@@ -80,11 +80,8 @@ private:
 
 	GLenum *auxBuffers;
 	unsigned char numAuxBuffers;
-
 	unsigned int bufferHandle[5];
-
 	unsigned int renderBufferDepthHandle;
-
 	unsigned int fboHandle;
 };
 
