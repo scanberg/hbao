@@ -30,7 +30,7 @@
 
 bool setupGL();
 void calcFPS(float &dt);
-void GLFWCALL keyCallback(int key, int action);
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 void init();
 void cleanUp();
@@ -41,6 +41,8 @@ void generateNoiseTexture(int width, int height);
 bool running = true;
 bool blur = false;
 bool fullres = true;
+
+GLFWwindow* window;
 
 Model * mdl;
 Geometry * model;
@@ -239,9 +241,11 @@ int main()
 
     fsquad->draw();
 		
-		glfwSwapBuffers();
+		glfwSwapBuffers(window);
 
-		if(!glfwGetWindowParam(GLFW_OPENED))
+        glfwPollEvents();
+        
+        if (glfwWindowShouldClose(window))
 			running = false;
 
     //timeStamps[6] = glfwGetTime();
@@ -370,7 +374,7 @@ void init()
   fboHalfRes->attachBuffer(FBO_AUX1, GL_R8, GL_RED, GL_FLOAT, GL_LINEAR, GL_LINEAR);
 
 
-  float fovRad = cam->getFov() * 3.14159265f / 180.0f;
+  float fovRad = cam->getFov();
 
   vec2 FocalLen, InvFocalLen, UVToViewA, UVToViewB, LinMAD;
 
@@ -523,22 +527,21 @@ bool setupGL()
 {
 	glfwInit();
 
-	glfwOpenWindowHint(GLFW_OPENGL_VERSION_MAJOR, 3);
-	glfwOpenWindowHint(GLFW_OPENGL_VERSION_MINOR, 2);
-	glfwOpenWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwOpenWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	glfwOpenWindowHint( GLFW_WINDOW_NO_RESIZE, GL_TRUE );
+    // Create a windowed mode window and its OpenGL context
+    window = glfwCreateWindow(WIDTH, HEIGHT, "hbao", nullptr, nullptr);
+    if (!window) {
+        printf("Failed to create window\n");
+        glfwTerminate();
+        exit(-1);
+    }
 
-	if(!glfwOpenWindow(	WIDTH,
-						HEIGHT,
-						8, 8, 8, 8,
-						32, 0,
-						GLFW_WINDOW))
-	{
-		logError("could not create GLFW-window");
-		return false;
-	}
+    // Make the window's context current
+    glfwMakeContextCurrent(window);
 
 	logErrorsGL();
 
@@ -551,9 +554,7 @@ bool setupGL()
 
 	logErrorsGL();
 
-	logNote("Successfully created OpenGL-window, version %i.%i",
-         glfwGetWindowParam(GLFW_OPENGL_VERSION_MAJOR),
-         glfwGetWindowParam(GLFW_OPENGL_VERSION_MINOR));
+	logNote("Successfully created OpenGL-window, version");
 
 	logNote("GLSL-version: %s",glGetString(GL_SHADING_LANGUAGE_VERSION));
 
@@ -563,20 +564,20 @@ bool setupGL()
 	glfwSwapInterval(0);
   glActiveTexture(GL_TEXTURE0);
   glClearColor(1.0, 1.0, 1.0, 0.0);
-  glfwDisable(GLFW_MOUSE_CURSOR);
+  glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-	glfwSetKeyCallback(keyCallback);
+  glfwSetKeyCallback(window, keyCallback);
 
 	return true;
 }
 
-void GLFWCALL keyCallback(int key, int action)
+void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-  if(key == GLFW_KEY_ESC)
+  if(key == GLFW_KEY_ESCAPE)
     running = false;
-  else if(key == 'B' && action == GLFW_PRESS)
+  else if(key == GLFW_KEY_B && action == GLFW_PRESS)
     blur = !blur;
-  else if(key == 'F' && action == GLFW_PRESS)
+  else if(key == GLFW_KEY_F && action == GLFW_PRESS)
     fullres = !fullres;
 }
 
@@ -621,7 +622,7 @@ void calcFPS(float &dt)
         blur,
         comp,
         tot);
-      glfwSetWindowTitle(title);
+      glfwSetWindowTitle(window, title);
       t1 = 0.0;
       frames = 0;
     }
@@ -631,9 +632,9 @@ void calcFPS(float &dt)
 
 void modifyCamera(float dt)
 {
-    int x,y;
+    double x,y;
 
-    glfwGetMousePos(&x, &y);
+    glfwGetCursorPos(window, &x, &y);
 
     vec3 camrot = cam->getOrientation();
 
@@ -646,17 +647,17 @@ void modifyCamera(float dt)
     if(camrot.y < -360.0f) camrot.y += 360.0f;
     
     cam->setOrientation(camrot);
-    glfwSetMousePos(WIDTH/2, HEIGHT/2);
+    glfwSetCursorPos(window, WIDTH / 2, HEIGHT / 2);
 
     vec3 movevec;
 
-    if(glfwGetKey('W'))
+    if(glfwGetKey(window, GLFW_KEY_W))
         movevec.z -= MOVE_SPEED;
-    if(glfwGetKey('A'))
+    if (glfwGetKey(window, GLFW_KEY_A))
         movevec.x -= MOVE_SPEED;
-    if(glfwGetKey('S'))
+    if (glfwGetKey(window, GLFW_KEY_S))
         movevec.z += MOVE_SPEED;
-    if(glfwGetKey('D'))
+    if (glfwGetKey(window, GLFW_KEY_D))
         movevec.x += MOVE_SPEED;
 
     cam->move(movevec * dt);

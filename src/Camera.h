@@ -48,7 +48,7 @@ private:
 public:
     void setup();
     void draw();
-    Camera() : nearfar(vec2(0.1f,100.0f)), screensize(ivec2(1024,768)), fov(60.0f), lookat(NULL) {}
+    Camera() : nearfar(vec2(0.1f,100.0f)), screensize(ivec2(1024,768)), fov(glm::radians(60.f)), lookat(NULL) {}
     void setPosition(const vec3 &pos) { position = pos; }
     void setPosition(f32 x, f32 y, f32 z) { position = vec3(x,y,z);}
     void setOrientation(const vec3 &ori) { orientation = ori; }

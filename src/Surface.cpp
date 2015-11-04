@@ -1,5 +1,7 @@
 #include "Surface.h"
 #include <cstdio>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 
 Surface::sTexture Surface::defaultDiffuseTexture;
 Surface::sTexture Surface::defaultNormalTexture;
@@ -87,8 +89,8 @@ void updateTextureRGBA(Target target, unsigned char *data)
 
 void Surface::init()
 {
-	int width = 4;
-	int height = 4;
+	const int width = 4;
+	const int height = 4;
 
 	unsigned char diffData[width*height*3];
 	unsigned char normData[width*height*3];
@@ -127,131 +129,28 @@ void Surface::loadDiffuseTexture(const char *filename)
 {
 	printf("loading diffuse texture from %s... ", filename);
 
-	GLFWimage img;
-	if(GL_TRUE == glfwReadImage(filename, &img, 0))
-	{
-		unsigned char *data = NULL;
-		if(glIsTexture(diffuseTexture.handle))
-		{
-			if(img.Format == GL_RGB || img.Format == GL_RGBA)
-			{
-				data = new unsigned char[img.Width * img.Height * 3];
-				int offsetMultiplier = img.BytesPerPixel;
-				for(int y=0; y<img.Height; ++y)
-				{
-					for(int x=0; x<img.Width; ++x)
-					{
-						int offset = (y*img.Width + x);
-						data[3*offset+0] = img.Data[offsetMultiplier*offset+0];
-						data[3*offset+1] = img.Data[offsetMultiplier*offset+1];
-						data[3*offset+2] = img.Data[offsetMultiplier*offset+2];
-					}
-				}
-				glBindTexture(GL_TEXTURE_2D, diffuseTexture.handle);
-				updateTextureRGBA(RGB, data);
-				glBindTexture(GL_TEXTURE_2D, 0);
-			}
-			
-		}
-		else
-		{
-			if(img.Format == GL_RGB || img.Format == GL_RGBA)
-			{
-				data = new unsigned char[img.Width * img.Height * 4];
-				int offsetMultiplier = img.BytesPerPixel;
-				for(int y=0; y<img.Height; ++y)
-				{
-					for(int x=0; x<img.Width; ++x)
-					{
-						int offset = (y*img.Width + x);
-						data[4*offset+0] = img.Data[offsetMultiplier*offset+0];
-						data[4*offset+1] = img.Data[offsetMultiplier*offset+1];
-						data[4*offset+2] = img.Data[offsetMultiplier*offset+2];
-						data[4*offset+3] = 255;
-					}
-				}
-				diffuseTexture.handle = createTexture(true, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, img.Width, img.Height, data);
-			}
-			
-			diffuseTexture.width = img.Width;
-			diffuseTexture.height = img.Height;
-		}
+    stbi_set_flip_vertically_on_load(1);
 
-		if(data)
-			delete[] data;
+    int x, y, c;
+    unsigned char* data = stbi_load(filename, &x, &y, &c, 4);
 
-		printf("success\n");
-	}
-	else
-		printf("failed\n");
+    if (!glIsTexture(diffuseTexture.handle))
+    {
+        diffuseTexture.handle = createTexture(true, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, x, y, data);
+    }
+    else
+    {
+        glBindTexture(GL_TEXTURE_2D, diffuseTexture.handle);
+        updateTextureRGBA(RGB, data);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
 
-	glfwFreeImage(&img);
+	stbi_image_free(data);
 }
 
 void Surface::loadMaskTexture(const char *filename)
 {
-	printf("loading mask texture from %s... ", filename);
 
-	GLFWimage img;
-	if(GL_TRUE == glfwReadImage(filename, &img, 0))
-	{
-		unsigned char *data = NULL;
-
-		if(glIsTexture(diffuseTexture.handle))
-		{
-			if(	img.Format == GL_RGB || img.Format == GL_RGBA ||
-				img.Format ==  GL_ALPHA || img.Format ==  GL_LUMINANCE)
-			{
-				data = new unsigned char[img.Width * img.Height];
-				int offsetMultiplier = img.BytesPerPixel;
-				for(int y=0; y<img.Height; ++y)
-				{
-					for(int x=0; x<img.Width; ++x)
-					{
-						int offset = (y*img.Width + x);
-						data[offset] = img.Data[offsetMultiplier*offset];
-					}
-				}
-				glBindTexture(GL_TEXTURE_2D, diffuseTexture.handle);
-				updateTextureRGBA(A, data);
-				glBindTexture(GL_TEXTURE_2D, diffuseTexture.handle);
-			}
-			
-		}
-		else
-		{
-			if(	img.Format == GL_RGB || img.Format == GL_RGBA ||
-				img.Format ==  GL_ALPHA || img.Format ==  GL_LUMINANCE)
-			{
-				data = new unsigned char[img.Width * img.Height * 4];
-				int offsetMultiplier = img.BytesPerPixel;
-				for(int y=0; y<img.Height; ++y)
-				{
-					for(int x=0; x<img.Width; ++x)
-					{
-						int offset = (y*img.Width + x);
-						data[4*offset+0] = 255;
-						data[4*offset+1] = 255;
-						data[4*offset+2] = 255;
-						data[4*offset+3] = img.Data[offsetMultiplier*offset];
-					}
-				}
-				diffuseTexture.handle = createTexture(true, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, img.Width, img.Height, data);
-			}
-			
-			diffuseTexture.width = img.Width;
-			diffuseTexture.height = img.Height;
-		}
-
-		if(data)
-			delete[] data;
-
-		printf("success\n");
-	}
-	else
-		printf("failed\n");
-
-	glfwFreeImage(&img);
 }
 
 void Surface::loadSpecularTexture(const char *filename)
@@ -261,42 +160,7 @@ void Surface::loadSpecularTexture(const char *filename)
 
 void Surface::loadNormalTexture(const char *filename)
 {
-	printf("loading normal texture from %s... ", filename);
 
-	GLFWimage img;
-	if(GL_TRUE == glfwReadImage(filename, &img, 0))
-	{
-		unsigned char *data = NULL;
-
-		if(	img.Format == GL_RGB || img.Format == GL_RGBA )
-		{
-			data = new unsigned char[img.Width * img.Height * 3];
-			int offsetMultiplier = img.BytesPerPixel;
-			for(int y=0; y<img.Height; ++y)
-			{
-				for(int x=0; x<img.Width; ++x)
-				{
-					int offset = (y*img.Width + x);
-					data[3*offset+0] = img.Data[offsetMultiplier*offset+0];
-					data[3*offset+1] = img.Data[offsetMultiplier*offset+1];
-					data[3*offset+2] = img.Data[offsetMultiplier*offset+2];
-				}
-			}
-			normalTexture.handle = createTexture(false, GL_RGB8, GL_RGB, GL_UNSIGNED_BYTE, img.Width, img.Height, data);
-		}
-		
-		normalTexture.width = img.Width;
-		normalTexture.height = img.Height;
-
-		if(data)
-			delete[] data;
-
-		printf("success\n");
-	}
-	else
-		printf("failed\n");
-
-	glfwFreeImage(&img);
 }
 
 void Surface::bind()
